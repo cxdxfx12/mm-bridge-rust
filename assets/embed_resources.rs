@@ -74,12 +74,12 @@ BEGIN
     BEGIN
       VALUE "CompanyName", "MiaoMiao Bridge"
       VALUE "FileDescription", "{description}"
-      VALUE "FileVersion", "0.3.0.0"
+      VALUE "FileVersion", "0.4.0.0"
       VALUE "InternalName", "{internal_name}"
       VALUE "LegalCopyright", "Copyright (C) 2026 MiaoMiao Bridge"
       VALUE "OriginalFilename", "{original_exe}"
       VALUE "ProductName", "MiaoMiao DingTalk-WeChat Bridge (Rust)"
-      VALUE "ProductVersion", "0.3.0.0"
+      VALUE "ProductVersion", "0.4.0.0"
     END
   END
   BLOCK "VarFileInfo"

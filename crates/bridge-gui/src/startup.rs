@@ -115,6 +115,12 @@ pub fn install_panic_hook() {
 
 /// 已有实例时把它的窗口拉到前台，返回 true 表示本进程应当直接退出。
 pub fn forward_to_existing() -> bool {
+    // 并列验证 / 灰度对照用：设了它就不参与单实例互斥。
+    // 日常双击不会设置，行为完全不变。
+    if std::env::var_os("MIAOMIAO_ALLOW_MULTI").is_some() {
+        log("MIAOMIAO_ALLOW_MULTI=1，跳过单实例检查（并列验证）");
+        return false;
+    }
     unsafe {
         let name = wide(MUTEX_NAME);
         let mutex = CreateMutexW(ptr::null(), 0, name.as_ptr());

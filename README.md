@@ -1,8 +1,12 @@
 # 喵喵钉钉-微信消息转发桥 · Rust 版
 
-> 版本 **0.3.0** ｜ Windows x64 ｜ egui 0.37 ｜ 单文件独立安装包
+> 版本 **0.4.0** ｜ Windows x64 ｜ egui 0.37 ｜ 单文件独立安装包
 
 把钉钉指定群的消息按规则转发到指定微信群。本仓库是这套系统的 **Rust 控制台 + 独立版安装器**；Python 正式版（0.63 及以前）在另一个仓库 `mm-dd-wx`。
+
+**下载**：[Releases · v0.4.0](https://github.com/cxdxfx12/mm-bridge-rust/releases/tag/v0.4.0) → `MiaoMiaoBridge-Rust-Standalone-Setup-v0.4.0.exe`（单文件，约 157 MiB）。
+
+**0.4.0 的关键变化**：左侧 5 个导航不再是只有「运行总览」有内容，另外 4 个管理页全部接上真实能力 —— 消息流水（搜索 / 筛选 / 详情 / CSV）、规则与会话（读改 `config.yaml` 并保留注释）、漏转对账（桥内漏投清单 + 导出）、设置中心（原文编辑、路径、数据库清理与 VACUUM）。所有查询仍只读 `bridge.db`；写操作只作用于独立版自己的配置与数据库。
 
 **0.3.0 的关键变化**：安装包自带完整转发引擎。目标机器不需要装 Python、也不需要预装 0.63 正式版，双击一个 `Setup.exe` 就能真正开始转发。
 
@@ -36,8 +40,9 @@ Rust 不重写钉钉 WAL 解密、OCR 和微信 UIA —— 那套生产逻辑久
 ├── Cargo.lock
 ├── .cargo/config.toml       # rsproxy 镜像（国内构建更快）
 ├── crates/
-│   ├── bridge-core/src/     # fingerprint.rs、data.rs、lib.rs
-│   ├── bridge-gui/src/      # main.rs、runner.rs、datasource.rs、theme.rs、widgets.rs、startup.rs
+│   ├── bridge-core/src/     # fingerprint.rs、data.rs（只读统计 / 流水 / 漏投 / CSV）、lib.rs
+│   ├── bridge-gui/src/      # main.rs、pages.rs（4 个管理页）、config.rs、dbclean.rs、
+│   │                        # runner.rs、datasource.rs、theme.rs、widgets.rs、startup.rs
 │   └── bridge-setup/src/    # main.rs、bundle.rs（raw deflate + CRC32）
 ├── assets/
 │   ├── app.ico / app_*.png / app_32.rgba   # 图标资源（构建必需，已入库）
@@ -60,7 +65,7 @@ Rust 不重写钉钉 WAL 解密、OCR 和微信 UIA —— 那套生产逻辑久
 - 一份 Python 正式版安装目录，作为引擎归档源（可用 `MIAOMIAO_BACKEND_SRC` 或 `--src` 指向任意副本）
 
 ```bash
-# 1. 测试（22 条：指纹 golden、只读数据层、归档路径穿越、token 注入等）
+# 1. 测试（37 条：指纹 golden、只读数据层、配置读写、清理口径、归档路径穿越、token 注入等）
 cargo test --workspace
 
 # 2. 图标（如已提交的资源未改动可跳过）
@@ -102,6 +107,18 @@ python assets/pack_backend.py --all --src "C:\Program Files\喵喵钉钉-微信�
 | 「打开配置」 | 编辑 `config.yaml` |
 | `bridge-gui.exe --worker-smoke` | 无人值守自检：启动引擎 → 检查网关 → 收日志 → 优雅停止，结果写 `startup.log` |
 
+### 五个页面（0.4.0 起全部可用）
+
+| 导航 | 能力 |
+|---|---|
+| 运行总览 | KPI、实时日志、最近流水、F5/F6 真实启停 |
+| 消息流水 | 最多 200 条真实入库记录，关键词搜索 + 状态筛选，点行看全文，导出 UTF-8 BOM CSV |
+| 规则与会话 | 展示当前生效配置与 `routes` 规则；表单改采集 / 投递常用字段，写回 `config.yaml` 时保留注释并留 `.bak` |
+| 漏转对账 | 基于 `bridge.db` 列出「从未成功投递」的消息（待投递 / 仅失败），可导出清单、启动自检、跳转正式版跨库对账 |
+| 设置中心 | 运行环境路径、配置原文编辑、消息数据库体检 → 二次确认 → 删行 + `VACUUM`、关于与快捷键 |
+
+> 清理按钮有硬闸门：只有**独立版自带数据库**且**引擎已停止**时才可用；接 Python 正式版库时永远是只读，避免误删生产数据。真正的「钉钉本地库 vs 入库」跨库对账仍由 Python 引擎的 `reconcile` 模块完成。
+
 安装器参数：`--silent`（无弹窗）、`--no-shortcut`、`--dir <路径>`、`--uninstall`、`--purge`（卸载时连数据一起删，默认**保留** `data/`）。
 
 **数据隔离**：配置与数据库只在 `<安装目录>/config.yaml` 和 `<安装目录>/data/bridge.db`，不读写正式版任何文件。首次安装会自动配好网关 token —— 本机装过正式版就继承旧值（手机端无需改动），干净机器随机生成 48 位十六进制值。
@@ -117,6 +134,7 @@ python assets/pack_backend.py --all --src "C:\Program Files\喵喵钉钉-微信�
 | `MIAOMIAO_BRIDGE_DB` | 指定只读数据源 |
 | `MIAOMIAO_WORKER_PYTHON` / `DDWX_WORKER_PYTHON` | 指定工作解释器 |
 | `MIAOMIAO_BRIDGE_CONFIG` / `DDWX_CONFIG` | 指定配置文件 |
+| `MIAOMIAO_ALLOW_MULTI=1` | 跳过单实例检查，用于新旧版本并列验证（日常不用） |
 
 ---
 

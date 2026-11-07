@@ -524,6 +524,152 @@ pub fn window_button(ui: &mut egui::Ui, t: &Theme, close: bool) -> egui::Respons
     resp
 }
 
+/// 表单字段：固定宽标签 + 单行输入框（管理页统一用它，输入框样式由 theme 灌好）。
+pub fn field(
+    ui: &mut egui::Ui,
+    t: &Theme,
+    label: &str,
+    value: &mut String,
+    hint: &str,
+    width: f32,
+) -> egui::Response {
+    ui.horizontal(|ui| {
+        let (r, _) = ui.allocate_exact_size(Vec2::new(112.0, 28.0), egui::Sense::hover());
+        ui.painter().text(
+            p2(r.min.x, r.center().y),
+            Align2::LEFT_CENTER,
+            label,
+            FontId::proportional(12.0),
+            t.text_muted,
+        );
+        ui.add_sized(
+            Vec2::new(width, 28.0),
+            egui::TextEdit::singleline(value).hint_text(hint).font(egui::FontId::proportional(12.0)),
+        )
+    })
+    .inner
+}
+
+/// 开关行：复选框 + 右侧灰色说明。
+pub fn switch(ui: &mut egui::Ui, t: &Theme, label: &str, value: &mut bool, hint: &str) {
+    ui.horizontal(|ui| {
+        let (r, _) = ui.allocate_exact_size(Vec2::new(112.0, 26.0), egui::Sense::hover());
+        ui.painter().text(
+            p2(r.min.x, r.center().y),
+            Align2::LEFT_CENTER,
+            label,
+            FontId::proportional(12.0),
+            t.text_muted,
+        );
+        ui.checkbox(value, "");
+        ui.add_space(t.space_2);
+        ui.colored_label(t.text_faint, RichText::new(hint).size(11.0));
+    });
+}
+
+/// 键值行：只读展示配置摘要。
+pub fn kv(ui: &mut egui::Ui, t: &Theme, label: &str, value: &str, color: Color32) {
+    ui.horizontal(|ui| {
+        let (r, _) = ui.allocate_exact_size(Vec2::new(120.0, 24.0), egui::Sense::hover());
+        ui.painter().text(
+            p2(r.min.x, r.center().y),
+            Align2::LEFT_CENTER,
+            label,
+            FontId::proportional(11.0),
+            t.text_faint,
+        );
+        ui.colored_label(color, RichText::new(value).size(12.0));
+    });
+}
+
+#[derive(Clone, Copy)]
+pub enum NoticeKind {
+    Info,
+    Warning,
+    Danger,
+    Success,
+}
+
+/// 说明 / 警告条：淡色底 + 左侧竖条 + 标题 + 正文。
+pub fn notice(ui: &mut egui::Ui, t: &Theme, kind: NoticeKind, title: &str, body: &str) {
+    let (fg, bg) = match kind {
+        NoticeKind::Info => (t.primary, t.primary_soft),
+        NoticeKind::Warning => (t.warning, t.warning_soft),
+        NoticeKind::Danger => (t.danger, t.danger_soft),
+        NoticeKind::Success => (t.success, t.success_soft),
+    };
+    egui::Frame::default()
+        .fill(bg)
+        .corner_radius(t.r_sm)
+        .inner_margin(t.space_3)
+        .show(ui, |ui| {
+            let r = ui.max_rect();
+            ui.painter().rect_filled(
+                Rect::from_min_size(r.min, Vec2::new(3.0, r.height())),
+                2.0,
+                fg,
+            );
+            ui.colored_label(fg, RichText::new(title).size(12.0).strong());
+            ui.add_space(t.space_1);
+            ui.colored_label(t.text, RichText::new(body).size(11.0));
+        });
+}
+
+/// 表格表头：`cols` 为列名，`frac` 为每列起点占行宽的比例。
+pub fn table_header(ui: &mut egui::Ui, t: &Theme, cols: &[&str], frac: &[f32]) {
+    let w = ui.available_width();
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(w, 30.0), egui::Sense::hover());
+    let p = ui.painter();
+    p.rect_filled(rect, t.r_sm, t.bg_surface_2);
+    for (i, name) in cols.iter().enumerate() {
+        p.text(
+            p2(rect.min.x + rect.width() * frac[i], rect.center().y),
+            Align2::LEFT_CENTER,
+            *name,
+            FontId::proportional(11.0),
+            t.text_muted,
+        );
+    }
+}
+
+/// 表格行：斑马纹背景 + 可点击响应，返回行矩形。
+pub fn table_row(
+    ui: &mut egui::Ui,
+    t: &Theme,
+    index: usize,
+    height: f32,
+    selected: bool,
+) -> (Rect, egui::Response) {
+    let w = ui.available_width();
+    let (rect, resp) = ui.allocate_exact_size(
+        Vec2::new(w, height),
+        egui::Sense::click(),
+    );
+    let p = ui.painter();
+    if selected {
+        p.rect_filled(rect, 0.0, t.primary_soft);
+    } else if index % 2 == 1 || resp.hovered() {
+        p.rect_filled(rect, 0.0, t.bg_subtle);
+    }
+    (rect, resp)
+}
+
+/// 在表格行里写一格文字。
+pub fn cell(ui: &mut egui::Ui, rect: Rect, x: f32, text: &str, color: Color32, mono: bool) {
+    let font = if mono {
+        FontId::monospace(11.0)
+    } else {
+        FontId::proportional(11.0)
+    };
+    ui.painter().text(
+        p2(rect.min.x + rect.width() * x, rect.center().y),
+        Align2::LEFT_CENTER,
+        text,
+        font,
+        color,
+    );
+}
+
 /// 品牌方块：主色圆角底 + 白色信封线条。
 pub fn brand_mark(ui: &mut egui::Ui, t: &Theme) {
     let (rect, _) = ui.allocate_exact_size(Vec2::new(28.0, 28.0), egui::Sense::hover());

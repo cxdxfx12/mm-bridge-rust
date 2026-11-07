@@ -27,12 +27,71 @@ pub struct Kpi {
 pub struct FlowRow {
     /// HH:MM:SS，取自 messages.created_at。
     pub time: String,
+    /// 完整日期时间 "YYYY-MM-DD HH:MM:SS"（msg_time 优先，缺则 created_at）。
+    pub when: String,
     pub sender: String,
     pub summary: String,
+    /// 未经截断的正文（详情页用）。
+    pub full: String,
+    pub msg_type: String,
     /// "已投递" / "投递失败" / "待投递"
     pub status: String,
     pub ok: bool,
     pub target: String,
+}
+
+/// 消息流水页的筛选口径，与界面下拉框一一对应。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FlowFilter {
+    All,
+    Ok,
+    Fail,
+    Pending,
+}
+
+impl FlowFilter {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::All => "全部状态",
+            Self::Ok => "已投递",
+            Self::Fail => "投递失败",
+            Self::Pending => "待投递",
+        }
+    }
+
+    fn sql(self) -> &'static str {
+        match self {
+            Self::All => "1 = 1",
+            Self::Ok => "COALESCE(d.status, '') = 'ok'",
+            Self::Fail => "COALESCE(d.status, '') = 'fail'",
+            Self::Pending => "COALESCE(d.status, '') NOT IN ('ok', 'fail')",
+        }
+    }
+}
+
+/// 桥内疑似漏投清单：一条消息从未出现过 `status='ok'` 的投递记录。
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReconcileRow {
+    pub when: String,
+    pub sender: String,
+    pub summary: String,
+    /// 累计投递尝试次数。
+    pub attempts: i64,
+    pub last_status: String,
+    pub last_error: String,
+    pub target: String,
+}
+
+impl ReconcileRow {
+    pub fn category(&self) -> &'static str {
+        if self.attempts == 0 {
+            "待投递"
+        } else if self.last_status == "fail" {
+            "仅失败"
+        } else {
+            "未成功"
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -135,25 +194,42 @@ fn read_kpi(conn: &Connection, today: &str) -> rusqlite::Result<Kpi> {
 }
 
 /// 每条消息取「最后一次投递」的状态（deliveries 里可能有重试），最新的排在最前。
-fn read_flow(conn: &Connection) -> rusqlite::Result<Vec<FlowRow>> {
-    let mut stmt = conn.prepare(
+///
+/// `limit` / `keyword` / `filter` 给「消息流水」页用；首页总览传 (8, "", All)
+/// 与旧口径完全一致。全部参数都走绑定变量，筛选枚举只拼固定 SQL 片段。
+pub fn query_flow(
+    conn: &Connection,
+    limit: i64,
+    keyword: &str,
+    filter: FlowFilter,
+) -> rusqlite::Result<Vec<FlowRow>> {
+    let sql = format!(
         "SELECT m.msg_time, COALESCE(m.sender_name, ''), COALESCE(m.content, ''), \
                 COALESCE(m.msg_type, ''), COALESCE(d.status, ''), \
                 COALESCE(d.target, ''), m.created_at \
          FROM messages m \
          LEFT JOIN deliveries d \
            ON d.id = (SELECT MAX(id) FROM deliveries WHERE uid = m.uid) \
-         ORDER BY m.created_at DESC LIMIT 8",
-    )?;
-    let rows = stmt.query_map([], |r| {
-        let msg_time: String = r.get(0)?;
-        let sender: String = r.get(1)?;
-        let content: String = r.get(2)?;
-        let msg_type: String = r.get(3)?;
-        let status: String = r.get(4)?;
-        let target: String = r.get(5)?;
-        let created_at: String = r.get(6)?;
-        Ok((msg_time, sender, content, msg_type, status, target, created_at))
+         WHERE {pred} \
+           AND (?2 = '' OR COALESCE(m.sender_name, '') LIKE ?3 \
+                OR COALESCE(m.content, '') LIKE ?3 \
+                OR COALESCE(d.target, '') LIKE ?3) \
+         ORDER BY m.created_at DESC LIMIT ?1",
+        pred = filter.sql()
+    );
+    let needle = keyword.trim();
+    let kw = format!("%{needle}%");
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![limit, needle, kw], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, String>(3)?,
+            r.get::<_, String>(4)?,
+            r.get::<_, String>(5)?,
+            r.get::<_, String>(6)?,
+        ))
     })?;
 
     let mut out = Vec::new();
@@ -164,24 +240,134 @@ fn read_flow(conn: &Connection) -> rusqlite::Result<Vec<FlowRow>> {
             "fail" => ("投递失败", false),
             _ => ("待投递", false),
         };
+        let when = if msg_time.trim().is_empty() {
+            created_at.clone()
+        } else {
+            msg_time.clone()
+        };
         out.push(FlowRow {
-            time: hhmmss(if msg_time.is_empty() {
-                &created_at
-            } else {
-                &msg_time
-            }),
+            time: hhmmss(&when),
+            when,
             sender: if sender.trim().is_empty() {
                 "—".to_owned()
             } else {
                 clean(&sender)
             },
             summary: summarize(&content, &msg_type, 28),
+            full: clean(&content),
+            msg_type: clean(&msg_type),
             status: label.to_owned(),
             ok,
             target: clean(&target),
         });
     }
     Ok(out)
+}
+
+fn read_flow(conn: &Connection) -> rusqlite::Result<Vec<FlowRow>> {
+    query_flow(conn, 8, "", FlowFilter::All)
+}
+
+/// 疑似漏投：从未成功投递过的消息（含一次都没尝试过的待投递）。
+/// 真正的「钉钉本地库 vs 桥」跨库对账仍由 Python 引擎的 reconcile 模块完成，
+/// 这里只做桥内自查，口径写在界面上，避免让人误以为已经做了跨库比对。
+pub fn query_reconcile(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<ReconcileRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT m.msg_time, COALESCE(m.sender_name, ''), COALESCE(m.content, ''), \
+                COALESCE(m.msg_type, ''), \
+                (SELECT COUNT(*) FROM deliveries d2 WHERE d2.uid = m.uid), \
+                COALESCE((SELECT d3.status FROM deliveries d3 WHERE d3.uid = m.uid \
+                          ORDER BY d3.id DESC LIMIT 1), ''), \
+                COALESCE((SELECT d3.error FROM deliveries d3 WHERE d3.uid = m.uid \
+                          ORDER BY d3.id DESC LIMIT 1), ''), \
+                COALESCE((SELECT d3.target FROM deliveries d3 WHERE d3.uid = m.uid \
+                          ORDER BY d3.id DESC LIMIT 1), ''), \
+                m.created_at \
+         FROM messages m \
+         WHERE NOT EXISTS (SELECT 1 FROM deliveries d \
+                           WHERE d.uid = m.uid AND d.status = 'ok') \
+         ORDER BY m.created_at DESC LIMIT ?1",
+    )?;
+    let rows = stmt.query_map(params![limit], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, String>(3)?,
+            r.get::<_, i64>(4)?,
+            r.get::<_, String>(5)?,
+            r.get::<_, String>(6)?,
+            r.get::<_, String>(7)?,
+            r.get::<_, String>(8)?,
+        ))
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (msg_time, sender, content, msg_type, attempts, last_status, last_error, target, created_at) = row?;
+        let when = if msg_time.trim().is_empty() {
+            created_at
+        } else {
+            msg_time
+        };
+        out.push(ReconcileRow {
+            when,
+            sender: if sender.trim().is_empty() {
+                "—".to_owned()
+            } else {
+                clean(&sender)
+            },
+            summary: summarize(&content, &msg_type, 34),
+            attempts,
+            last_status: clean(&last_status),
+            last_error: clean(&last_error),
+            target: clean(&target),
+        });
+    }
+    Ok(out)
+}
+
+/// CSV 单元格转义：引号翻倍，含逗号 / 引号 / 换行时整体加引号。
+fn csv_cell(s: &str) -> String {
+    if s.contains([',', '"', '\n', '\r']) {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_owned()
+    }
+}
+
+/// 导出为 Excel 可直接打开的 CSV（调用方负责写 UTF-8 BOM）。
+pub fn flow_csv(rows: &[FlowRow]) -> String {
+    let mut out = String::from("时间,发送者,目标,内容,状态,类型\n");
+    for r in rows {
+        out.push_str(&format!(
+            "{},{},{},{},{},{}\n",
+            csv_cell(&r.when),
+            csv_cell(&r.sender),
+            csv_cell(&r.target),
+            csv_cell(r.full.replace('\n', " ").as_str()),
+            csv_cell(&r.status),
+            csv_cell(&r.msg_type),
+        ));
+    }
+    out
+}
+
+pub fn reconcile_csv(rows: &[ReconcileRow]) -> String {
+    let mut out = String::from("时间,发送者,分类,尝试次数,最后状态,目标,摘要,最后错误\n");
+    for r in rows {
+        out.push_str(&format!(
+            "{},{},{},{},{},{},{},{}\n",
+            csv_cell(&r.when),
+            csv_cell(&r.sender),
+            csv_cell(r.category()),
+            r.attempts,
+            csv_cell(&r.last_status),
+            csv_cell(&r.target),
+            csv_cell(&r.summary),
+            csv_cell(&r.last_error),
+        ));
+    }
+    out
 }
 
 fn read_entries(conn: &Connection) -> rusqlite::Result<Vec<LogEntry>> {
@@ -356,5 +542,48 @@ mod tests {
         assert_eq!(date_of("2026-11-06 16:13:41"), "2026-11-06");
         assert_eq!(summarize("第一行\n第二行", "text", 10), "第一行");
         assert_eq!(shorten("一二三四五", 3), "一二三…");
+    }
+
+    #[test]
+    fn flow_query_filters_and_keeps_full_text() {
+        let c = fixture();
+        let all = query_flow(&c, 50, "", FlowFilter::All).unwrap();
+        assert_eq!(all.len(), 3);
+        assert!(all.iter().any(|r| r.full.contains("姓名 单号")));
+        // u1 最后一次是 ok、u2 是 ok、u3 是 fail，没有从未尝试投递的消息。
+        assert_eq!(query_flow(&c, 50, "", FlowFilter::Ok).unwrap().len(), 2);
+        assert_eq!(query_flow(&c, 50, "", FlowFilter::Fail).unwrap().len(), 1);
+        assert_eq!(query_flow(&c, 50, "", FlowFilter::Pending).unwrap().len(), 0);
+        assert_eq!(query_flow(&c, 50, "签收", FlowFilter::All).unwrap().len(), 1);
+        assert_eq!(query_flow(&c, 1, "", FlowFilter::All).unwrap().len(), 1);
+        // u3 的正文是空串，COALESCE 保证空关键词不会把它筛掉。
+        assert_eq!(query_flow(&c, 50, "   ", FlowFilter::All).unwrap().len(), 3);
+    }
+
+    #[test]
+    fn reconcile_only_lists_messages_without_success() {
+        let c = fixture();
+        let r = query_reconcile(&c, 50).unwrap();
+        // u1 最后一次是 ok、u2 是 ok，只有 u3（仅失败）应出现。
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].category(), "仅失败");
+        assert_eq!(r[0].attempts, 1);
+        assert!(r[0].last_error.contains("文件卡片"));
+        c.execute("INSERT INTO messages VALUES ('u4','android','','','','','','文字','text','','2026-11-07 10:00:00','','2026-11-07 10:00:01')", []).unwrap();
+        let r = query_reconcile(&c, 50).unwrap();
+        assert_eq!(r.len(), 2);
+        assert_eq!(r[0].category(), "待投递");
+        assert_eq!(r[0].attempts, 0);
+    }
+
+    #[test]
+    fn csv_escapes_commas_and_quotes() {
+        let mut rows = query_flow(&fixture(), 1, "", FlowFilter::All).unwrap();
+        rows[0].full = "a,b\n\"c\"".to_owned();
+        let csv = flow_csv(&rows);
+        assert!(csv.starts_with("时间,发送者,目标,内容,状态,类型\n"));
+        assert!(csv.contains("\"a,b \"\"c\"\"\""));
+        let rec = reconcile_csv(&query_reconcile(&fixture(), 10).unwrap());
+        assert!(rec.contains("仅失败"));
     }
 }

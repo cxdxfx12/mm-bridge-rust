@@ -7,13 +7,17 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod config;
 mod datasource;
+mod dbclean;
+mod pages;
 mod runner;
 mod startup;
 mod theme;
 mod widgets;
 
-use bridge_core::data::{self, Snapshot};
+use bridge_core::data::{self, FlowFilter, FlowRow, ReconcileRow, Snapshot};
+use config::{ConfigDoc, RuleForm};
 use eframe::egui::{self, Color32, RichText};
 use std::time::{Duration, Instant};
 use theme::Theme;
@@ -88,21 +92,39 @@ fn level_style(level: &str, t: &Theme) -> (Color32, String) {
     }
 }
 
+/// 字段对 `pages.rs` 可见：四个管理页以 `impl BridgeApp` 的形式写在那个模块里。
 struct BridgeApp {
-    t: Theme,
-    nav: usize,
-    phone: PhoneState,
+    pub(crate) t: Theme,
+    pub(crate) nav: usize,
+    pub(crate) phone: PhoneState,
     /// 本窗口事件 + worker 结构化日志（最新在末尾）。
-    logs: Vec<LogLine>,
+    pub(crate) logs: Vec<LogLine>,
     /// 从 bridge.db 只读刷出来的数据快照。
-    snapshot: Snapshot,
-    last_refresh: Instant,
-    refresh_every: Duration,
+    pub(crate) snapshot: Snapshot,
+    pub(crate) last_refresh: Instant,
+    pub(crate) refresh_every: Duration,
     /// Python 生产引擎定位结果。
-    backend: Result<runner::Backend, String>,
-    worker: Option<runner::Worker>,
-    run_state: RunState,
-    last_error: Option<String>,
+    pub(crate) backend: Result<runner::Backend, String>,
+    pub(crate) worker: Option<runner::Worker>,
+    pub(crate) run_state: RunState,
+    pub(crate) last_error: Option<String>,
+
+    // ── 0.4.0 管理页状态 ────────────────────────────────────────────
+    pub(crate) config: ConfigDoc,
+    pub(crate) rule_form: RuleForm,
+    pub(crate) flow_search: String,
+    pub(crate) flow_filter: FlowFilter,
+    pub(crate) flow_rows: Vec<FlowRow>,
+    pub(crate) flow_selected: Option<usize>,
+    pub(crate) flow_error: Option<String>,
+    pub(crate) recon_rows: Vec<ReconcileRow>,
+    pub(crate) recon_error: Option<String>,
+    pub(crate) settings_text: String,
+    pub(crate) settings_dirty: bool,
+    pub(crate) keep_days: String,
+    pub(crate) cleanup_plan: Option<dbclean::Plan>,
+    pub(crate) cleanup_armed: bool,
+    pub(crate) cleanup_result: Option<String>,
 }
 
 impl BridgeApp {
@@ -150,7 +172,11 @@ impl BridgeApp {
             Err(e) => logs.push((t.danger, "ERR".into(), datasource::local_clock(), e.clone())),
         }
 
-        Self {
+        let config = ConfigDoc::load();
+        let rule_form = RuleForm::from_doc(&config);
+        let settings_text = config.text.clone();
+        let keep_days = config.get("storage", "keep_days").unwrap_or_default();
+        let mut app = Self {
             t,
             nav: 0,
             phone: PhoneState::NoDevice,
@@ -162,19 +188,37 @@ impl BridgeApp {
             worker: None,
             run_state: RunState::Stopped,
             last_error: None,
-        }
+            config,
+            rule_form,
+            flow_search: String::new(),
+            flow_filter: FlowFilter::All,
+            flow_rows: Vec::new(),
+            flow_selected: None,
+            flow_error: None,
+            recon_rows: Vec::new(),
+            recon_error: None,
+            settings_text,
+            settings_dirty: false,
+            keep_days: if keep_days.is_empty() { "90".to_owned() } else { keep_days },
+            cleanup_plan: None,
+            cleanup_armed: false,
+            cleanup_result: None,
+        };
+        app.refresh_pages();
+        app
     }
 
-    fn push_log(&mut self, color: Color32, level: &str, text: impl Into<String>) {
+    pub(crate) fn push_log(&mut self, color: Color32, level: &str, text: impl Into<String>) {
         self.logs.push((color, level.to_owned(), datasource::local_clock(), text.into()));
         if self.logs.len() > 200 {
             self.logs.drain(..self.logs.len() - 160);
         }
     }
 
-    fn refresh(&mut self, manual: bool) {
+    pub(crate) fn refresh(&mut self, manual: bool) {
         self.snapshot = datasource::load();
         self.last_refresh = Instant::now();
+        self.refresh_pages();
         if manual {
             self.push_log(self.t.success, "OK", "已刷新 bridge.db 数据（只读）");
         }
@@ -227,7 +271,7 @@ impl BridgeApp {
         }
     }
 
-    fn start(&mut self, mode: runner::Mode) {
+    pub(crate) fn start(&mut self, mode: runner::Mode) {
         if self.worker.is_some() {
             self.push_log(self.t.info, "INFO", "已有任务在运行，请先停止");
             return;
@@ -278,7 +322,7 @@ impl BridgeApp {
         }
     }
 
-    fn stop(&mut self) {
+    pub(crate) fn stop(&mut self) {
         if let Some(w) = self.worker.as_mut() {
             w.request_stop();
             self.run_state = RunState::Stopping;
@@ -362,7 +406,7 @@ impl eframe::App for BridgeApp {
                     }
                     ui.colored_label(
                         t.text_faint,
-                        RichText::new("v0.3.0 · 独立版")
+                        RichText::new("v0.4.0 · 独立版")
                             .size(11.0)
                             .family(egui::FontFamily::Monospace),
                     );
@@ -568,6 +612,7 @@ impl eframe::App for BridgeApp {
 
                 ui.add_space(t.space_4);
 
+                if nav == 0 {
                 // 4 张等宽 KPI 卡：口径与 Python 版 storage.stats() 对齐
                 let k = &snap.kpi;
                 let total_deliveries = k.total_ok + k.total_fail;
@@ -660,10 +705,23 @@ impl eframe::App for BridgeApp {
                 });
 
                 ui.add_space(t.space_4);
+                } else {
+                    // 0.4.0：四个管理页接真实数据与配置，不再是空壳。
+                    match nav {
+                        1 => self.page_flow(ui),
+                        2 => self.page_rules(ui),
+                        3 => self.page_reconcile(ui),
+                        _ => self.page_settings(ui),
+                    }
+                    ui.add_space(t.space_4);
+                }
             });
         });
 
         // 写回交互产生的状态变更。
+        if nav != self.nav {
+            self.on_nav_change(nav);
+        }
         self.nav = nav;
         self.phone = phone;
         if do_refresh {

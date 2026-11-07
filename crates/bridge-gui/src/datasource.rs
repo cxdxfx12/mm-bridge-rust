@@ -5,7 +5,7 @@
 //! - 不启动 / 停止 worker，不碰 config.yaml，不改任何生产数据；
 //! - 「打开正式版」按钮只是用 ShellExecute 打开正式版 GUI，由用户在正式版里按 F5。
 
-use bridge_core::data::{self, Snapshot};
+use bridge_core::data::{self, FlowFilter, FlowRow, ReconcileRow, Snapshot};
 use rusqlite::{Connection, OpenFlags};
 use std::ffi::c_void;
 use std::path::{Path, PathBuf};
@@ -96,6 +96,12 @@ fn bundled_db() -> Option<PathBuf> {
         return None;
     }
     exe_dir().map(|d| d.join("data").join("bridge.db"))
+}
+
+/// 独立版自己的数据库；只有它才允许「设置中心 → 清理旧数据」写入。
+/// 接 Python 正式版库时返回 None，界面按钮会禁用，杜绝误删生产数据。
+pub fn own_db() -> Option<PathBuf> {
+    bundled_db()
 }
 
 /// worker 与界面共用的数据目录（哨兵文件 / 数据库都在这里）。
@@ -250,10 +256,77 @@ pub fn display_path(p: &str) -> String {
     }
 }
 
-/// 独立版的配置文件（安装目录根下，用户可直接编辑钉钉群 / 路由规则）。
+/// 独立版的配置文件路径（安装目录根下）。
+pub fn config_path() -> PathBuf {
+    exe_dir()
+        .map(|d| d.join("config.yaml"))
+        .unwrap_or_else(|| PathBuf::from("config.yaml"))
+}
+
 pub fn config_file() -> Option<String> {
-    let p = exe_dir()?.join("config.yaml");
+    let p = config_path();
     p.is_file().then(|| p.to_string_lossy().into_owned())
+}
+
+/// 安装目录（打开目录按钮用）。
+pub fn install_dir() -> PathBuf {
+    exe_dir().unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// 导出目录：`<数据目录>/exports`，按需创建。
+pub fn exports_dir() -> PathBuf {
+    let p = data_root().join("exports");
+    let _ = std::fs::create_dir_all(&p);
+    p
+}
+
+/// 用资源管理器 / 系统关联程序打开文件或目录。
+pub fn open_path(path: &Path) -> bool {
+    if !path.exists() {
+        return false;
+    }
+    let w = wide(&path.to_string_lossy());
+    let op = wide("open");
+    unsafe { ShellExecuteW(ptr::null(), op.as_ptr(), w.as_ptr(), ptr::null(), ptr::null(), 1) > 32 }
+}
+
+/// 所有管理页的查询都走这里：**永远只读**，并且强制优先独立版自带库。
+fn with_read_conn<T>(f: impl FnOnce(&Connection) -> rusqlite::Result<T>) -> Result<T, String> {
+    let db = if has_bundled_backend() {
+        bundled_db()
+    } else {
+        resolve_db()
+    };
+    let Some(db) = db else {
+        return Err("未找到 bridge.db".to_owned());
+    };
+    if !db.is_file() {
+        // 全新安装还没转发过：调用方按空列表处理，界面显示空态而不是报错。
+        return Err("EMPTY_DB".to_owned());
+    }
+    let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
+    let conn = Connection::open_with_flags(&db, flags).map_err(|e| format!("只读打开失败：{e}"))?;
+    let _ = conn.execute_batch("PRAGMA query_only = ON;");
+    f(&conn).map_err(|e| format!("查询失败：{e}"))
+}
+
+/// 消息流水页：更多行 + 关键词 + 状态筛选。
+pub fn load_flow(limit: i64, keyword: &str, filter: FlowFilter) -> Result<Vec<FlowRow>, String> {
+    match with_read_conn(|c| data::query_flow(c, limit, keyword, filter)) {
+        Ok(v) => Ok(v),
+        // 全新安装还没有库：当作空流水，不要报红。
+        Err(e) if e == "EMPTY_DB" || e.contains("no such table") => Ok(Vec::new()),
+        Err(e) => Err(e),
+    }
+}
+
+/// 漏转对账页：桥内从未成功投递过的消息。
+pub fn load_reconcile(limit: i64) -> Result<Vec<ReconcileRow>, String> {
+    match with_read_conn(|c| data::query_reconcile(c, limit)) {
+        Ok(v) => Ok(v),
+        Err(e) if e == "EMPTY_DB" || e.contains("no such table") => Ok(Vec::new()),
+        Err(e) => Err(e),
+    }
 }
 
 /// 用系统关联程序打开配置（一般是记事本）。
