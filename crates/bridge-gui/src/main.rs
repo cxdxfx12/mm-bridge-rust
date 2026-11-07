@@ -11,6 +11,7 @@ mod config;
 mod datasource;
 mod dbclean;
 mod pages;
+mod phone;
 mod runner;
 mod startup;
 mod theme;
@@ -27,31 +28,6 @@ const NAV: [&str; 5] = ["运行总览", "消息流水", "规则与会话", "漏�
 
 /// 32×32 裸 RGBA，供 eframe 设置窗口/任务栏图标（exe 资源图标另由 build.rs 嵌入）。
 const WINDOW_ICON: &[u8] = include_bytes!("../../../assets/app_32.rgba");
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum PhoneState {
-    Streaming,
-    NoDevice,
-    Unauthorized,
-}
-
-impl PhoneState {
-    fn label(self) -> &'static str {
-        match self {
-            Self::Streaming => "正常投屏",
-            Self::NoDevice => "无设备",
-            Self::Unauthorized => "USB 未授权",
-        }
-    }
-
-    fn color(self, t: &Theme) -> Color32 {
-        match self {
-            Self::Streaming => t.success,
-            Self::NoDevice => t.warning,
-            Self::Unauthorized => t.danger,
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RunState {
@@ -96,7 +72,6 @@ fn level_style(level: &str, t: &Theme) -> (Color32, String) {
 struct BridgeApp {
     pub(crate) t: Theme,
     pub(crate) nav: usize,
-    pub(crate) phone: PhoneState,
     /// 本窗口事件 + worker 结构化日志（最新在末尾）。
     pub(crate) logs: Vec<LogLine>,
     /// 从 bridge.db 只读刷出来的数据快照。
@@ -125,6 +100,13 @@ struct BridgeApp {
     pub(crate) cleanup_plan: Option<dbclean::Plan>,
     pub(crate) cleanup_armed: bool,
     pub(crate) cleanup_result: Option<String>,
+
+    // ── 0.5.0 手机画面（adb 抓帧） ──────────────────────────────────
+    pub(crate) phone_feed: Option<phone::PhoneFeed>,
+    phone_state: phone::DeviceState,
+    phone_frame: Option<phone::PhoneFrame>,
+    phone_tex: Option<egui::TextureHandle>,
+    phone_last_frame: Option<Instant>,
 }
 
 impl BridgeApp {
@@ -176,10 +158,27 @@ impl BridgeApp {
         let rule_form = RuleForm::from_doc(&config);
         let settings_text = config.text.clone();
         let keep_days = config.get("storage", "keep_days").unwrap_or_default();
+        // 手机画面：adb 在后台线程里抓帧，UI 只管收帧。找不到 adb 也要起
+        // （线程自己会原地等待），这样插上手机后无需重启界面。
+        let feed = phone::PhoneFeed::spawn();
+        match &feed.adb_path {
+            Some(p) => logs.push((
+                t.info,
+                "INFO".into(),
+                datasource::local_clock(),
+                format!("手机画面：adb 就绪（{p}），插上手机即可实时查看"),
+            )),
+            None => logs.push((
+                t.warning,
+                "WARN".into(),
+                datasource::local_clock(),
+                "手机画面：没找到 adb.exe（backend/tools/platform-tools），实时画面不可用".into(),
+            )),
+        }
+
         let mut app = Self {
             t,
             nav: 0,
-            phone: PhoneState::NoDevice,
             logs,
             snapshot,
             last_refresh: Instant::now(),
@@ -203,7 +202,13 @@ impl BridgeApp {
             cleanup_plan: None,
             cleanup_armed: false,
             cleanup_result: None,
+            phone_feed: None,
+            phone_state: phone::DeviceState::Offline,
+            phone_frame: None,
+            phone_tex: None,
+            phone_last_frame: None,
         };
+        app.phone_feed = Some(feed);
         app.refresh_pages();
         app
     }
@@ -356,10 +361,35 @@ impl eframe::App for BridgeApp {
         }
         ui.ctx().request_repaint_after(self.refresh_every);
 
+        // 手机画面：排空抓帧通道，把最新一帧转成纹理（上一帧会被覆盖）。
+        if let Some(feed) = &self.phone_feed {
+            let mut state = self.phone_state.clone();
+            let mut frame = self.phone_frame.take();
+            phone::drain(&feed.rx, &mut state, &mut frame);
+            self.phone_state = state;
+            if let Some(f) = frame {
+                let color = egui::ColorImage::from_rgba_unmultiplied(
+                    [f.w as usize, f.h as usize],
+                    &f.rgba,
+                );
+                match &self.phone_tex {
+                    Some(tex) => tex.clone().set(color, egui::TextureOptions::LINEAR),
+                    None => {
+                        self.phone_tex = Some(ui.ctx().load_texture(
+                            "phone_screen",
+                            color,
+                            egui::TextureOptions::LINEAR,
+                        ));
+                    }
+                }
+                self.phone_frame = Some(f);
+                self.phone_last_frame = Some(Instant::now());
+            }
+        }
+
         // 快照成局部变量，避免各 Panel 闭包交叉借用 self。
         let t = self.t;
         let mut nav = self.nav;
-        let mut phone = self.phone;
         let logs = self.logs.clone();
         let snap = self.snapshot.clone();
         let backend = self.backend.clone();
@@ -372,6 +402,17 @@ impl eframe::App for BridgeApp {
         let mut do_check = false;
         let mut do_refresh = false;
         let mut do_open_settings = false;
+        let mut do_phone_pause = false;
+        let mut do_phone_kick = false;
+
+        // 手机画面面板的快照（闭包里只用局部值）。
+        let phone_state = self.phone_state.clone();
+        let phone_tex = self.phone_tex.clone();
+        let phone_size = self.phone_frame.as_ref().map(|f| (f.w as f32, f.h as f32));
+        let phone_paused = self.phone_feed.as_ref().map(|f| f.is_paused()).unwrap_or(true);
+        let phone_age = self
+            .phone_last_frame
+            .map(|i| i.elapsed().as_secs_f32());
 
         ui.painter().rect_filled(ui.max_rect(), 0.0, t.bg_app);
 
@@ -406,7 +447,7 @@ impl eframe::App for BridgeApp {
                     }
                     ui.colored_label(
                         t.text_faint,
-                        RichText::new("v0.4.0 · 独立版")
+                        RichText::new("v0.5.0 · 独立版")
                             .size(11.0)
                             .family(egui::FontFamily::Monospace),
                     );
@@ -491,34 +532,97 @@ impl eframe::App for BridgeApp {
             });
 
         // ── 右侧手机画面 ──────────────────────────────────────────────
+        // 宽度跟随窗口自适应（30%，300~560），不再固定 308：宽屏上把右侧
+        // 空间用满，窄屏上也不挤中央区。画面等比撑满面板剩余高度。
+        let phone_w = (ui.input(|i| i.viewport_rect().width()) * 0.30).clamp(300.0, 560.0);
         egui::Panel::right("phone")
-            .exact_size(t.phone_w)
+            .exact_size(phone_w)
             .resizable(false)
             .show(ui, |ui| {
                 ui.add_space(t.space_4);
                 widgets::section_header(ui, &t, Icon::Phone, "手机画面", None);
                 ui.add_space(t.space_2);
 
-                egui::ComboBox::from_label("面板状态（演示）")
-                    .selected_text(phone.label())
-                    .show_ui(ui, |ui| {
-                        for s in [PhoneState::Streaming, PhoneState::NoDevice, PhoneState::Unauthorized] {
-                            ui.selectable_value(&mut phone, s, s.label());
+                // 状态行：设备状态 + 暂停/继续 + 手动刷新
+                let (fg, bg, txt) = match &phone_state {
+                    phone::DeviceState::Online => (t.success, t.success_soft, "设备在线"),
+                    phone::DeviceState::Unauthorized => {
+                        (t.danger, t.danger_soft, "USB 未授权")
+                    }
+                    phone::DeviceState::Offline => (t.warning, t.warning_soft, "未连接"),
+                };
+                ui.horizontal(|ui| {
+                    widgets::pill(ui, &t, txt, fg, bg, Some(fg));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.add_space(t.space_1);
+                        if widgets::action_button(
+                            ui, &t, Icon::Bolt, "刷新", ButtonStyle::Quiet, true,
+                        )
+                        .clicked()
+                        {
+                            do_phone_kick = true;
+                        }
+                        ui.add_space(t.space_1);
+                        let label = if phone_paused { "继续" } else { "暂停" };
+                        if widgets::action_button(
+                            ui, &t, Icon::Chart, label, ButtonStyle::Quiet, true,
+                        )
+                        .clicked()
+                        {
+                            do_phone_pause = true;
                         }
                     });
-
-                ui.add_space(t.space_3);
-                widgets::phone_mockup(ui, &t, phone);
+                });
                 ui.add_space(t.space_2);
-                widgets::pill(
-                    ui, &t,
-                    if phone == PhoneState::Streaming { "adb 已连接" } else { "adb 未就绪" },
-                    if phone == PhoneState::Streaming { t.success } else { t.warning },
-                    if phone == PhoneState::Streaming { t.success_soft } else { t.warning_soft },
-                    Some(phone.color(&t)),
+
+                // 画面区：等比撑满剩余高度（含 2 行页脚的预算）。
+                let footer_h = 58.0;
+                let avail = ui.available_height() - footer_h;
+                let avail_w = ui.available_width() - t.space_2;
+                let (rect, _) = ui.allocate_exact_size(
+                    egui::Vec2::new(avail_w.max(1.0), avail.max(1.0)),
+                    egui::Sense::hover(),
                 );
-                ui.add_space(t.space_1);
-                ui.colored_label(t.text_faint, RichText::new("面板走 adb，转发走 WiFi，互不影响").size(10.0));
+                ui.painter()
+                    .rect_filled(rect.expand(2.0), 8.0, t.bg_subtle);
+                match (&phone_tex, phone_size) {
+                    (Some(tex), Some((w, h))) if w > 0.0 && h > 0.0 => {
+                        let scale =
+                            (rect.width() / w).min(rect.height() / h);
+                        let size = egui::Vec2::new(w * scale, h * scale);
+                        let top_left =
+                            rect.center() - size * 0.5;
+                        egui::Image::new(tex)
+                            .fit_to_exact_size(size)
+                            .corner_radius(6.0)
+                            .paint_at(ui, egui::Rect::from_min_size(top_left, size));
+                        if let Some(age) = phone_age {
+                            ui.painter().text(
+                                rect.left_bottom() + egui::Vec2::new(8.0, -8.0),
+                                egui::Align2::LEFT_BOTTOM,
+                                format!("帧龄 {:.1}s", age),
+                                egui::FontId::monospace(10.0),
+                                t.text_faint,
+                            );
+                        }
+                    }
+                    _ => {
+                        ui.painter().text(
+                            rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            if phone_paused { "画面已暂停" } else { "等待手机画面…" },
+                            egui::FontId::proportional(13.0),
+                            t.text_faint,
+                        );
+                    }
+                }
+                ui.add_space(t.space_2);
+                ui.horizontal(|ui| {
+                    ui.colored_label(
+                        t.text_faint,
+                        RichText::new("面板走 adb，转发走 WiFi，互不影响").size(10.0),
+                    );
+                });
             });
 
         // ── 底部操作栏 ────────────────────────────────────────────────
@@ -723,7 +827,26 @@ impl eframe::App for BridgeApp {
             self.on_nav_change(nav);
         }
         self.nav = nav;
-        self.phone = phone;
+        if do_phone_pause || do_phone_kick {
+            let mut paused_now = false;
+            if let Some(feed) = &self.phone_feed {
+                if do_phone_pause {
+                    let new_state = !phone_paused;
+                    feed.set_paused(new_state);
+                    paused_now = true;
+                }
+                if do_phone_kick {
+                    feed.kick();
+                }
+            }
+            if paused_now {
+                self.push_log(
+                    self.t.info,
+                    "INFO",
+                    if phone_paused { "手机画面已恢复" } else { "手机画面已暂停（转发不受影响）" },
+                );
+            }
+        }
         if do_refresh {
             self.refresh(true);
         }

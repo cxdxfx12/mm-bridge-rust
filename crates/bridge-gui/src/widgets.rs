@@ -8,7 +8,6 @@ use eframe::egui::{
 };
 
 use crate::theme::Theme;
-use crate::PhoneState;
 
 /// 线条图标（统一 1.6px 描边、圆头，和视觉稿的 .ic 规范一致）。
 #[derive(Clone, Copy)]
@@ -408,100 +407,6 @@ pub fn empty_state(ui: &mut egui::Ui, t: &Theme, title: &str, hint: &str) {
         hint,
         FontId::proportional(11.0),
         t.text_faint,
-    );
-}
-
-/// 手机投屏面板：深色机身 + 圆角屏幕 + 状态栏 + 三态内容。
-pub fn phone_mockup(ui: &mut egui::Ui, t: &Theme, state: PhoneState) {
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(232.0, 396.0), egui::Sense::hover());
-    let p = ui.painter();
-    p.rect_filled(rect, 20.0, Color32::from_rgb(0x1C, 0x27, 0x40));
-    let screen = rect.shrink(9.0);
-    p.rect_filled(screen, 14.0, t.bg_surface);
-    p.rect_filled(
-        Rect::from_min_size(p2(rect.center().x - 18.0, rect.min.y + 4.0), Vec2::new(36.0, 3.0)),
-        2.0,
-        Color32::from_rgb(0x39, 0x44, 0x5E),
-    );
-    // 屏幕顶部状态栏
-    p.text(
-        p2(screen.min.x + 12.0, screen.min.y + 12.0),
-        Align2::LEFT_CENTER,
-        "9:41",
-        FontId::monospace(9.0),
-        t.text_muted,
-    );
-    icon(
-        p,
-        p2(screen.max.x - 18.0, screen.min.y + 12.0),
-        10.0,
-        t.text_muted,
-        Icon::Wifi,
-    );
-    p.line_segment(
-        [
-            p2(screen.min.x, screen.min.y + 28.0),
-            p2(screen.max.x, screen.min.y + 28.0),
-        ],
-        Stroke::new(1.0, t.border),
-    );
-
-    match state {
-        PhoneState::Streaming => {
-            // 模拟三条聊天气泡，证明「正常投屏」时画面长什么样。
-            for (i, (w, left)) in [(140.0, true), (112.0, false), (128.0, true)]
-                .iter()
-                .enumerate()
-            {
-                let y = screen.min.y + 48.0 + i as f32 * 46.0;
-                let x = if *left { screen.min.x + 14.0 } else { screen.max.x - w - 14.0 };
-                let r = Rect::from_min_size(p2(x, y), Vec2::new(*w, 32.0));
-                p.rect_filled(r, 8.0, if *left { t.bg_subtle } else { t.primary_soft });
-                for k in 0..3 {
-                    p.line_segment(
-                        [
-                            p2(r.min.x + 10.0, r.min.y + 10.0 + k as f32 * 7.0),
-                            p2(r.max.x - 10.0, r.min.y + 10.0 + k as f32 * 7.0),
-                        ],
-                        Stroke::new(1.2, t.border_strong),
-                    );
-                }
-            }
-        }
-        PhoneState::NoDevice | PhoneState::Unauthorized => {
-            let c = screen.center();
-            let col = state.color(t);
-            p.circle_filled(c - Vec2::new(0.0, 30.0), 26.0, col.gamma_multiply(0.14));
-            icon(p, c - Vec2::new(0.0, 30.0), 26.0, col, Icon::Phone);
-            let (line1, line2) = if state == PhoneState::NoDevice {
-                ("未检测到 adb 设备", "转发走 WiFi，不受影响")
-            } else {
-                ("USB 调试未授权", "请在手机上允许调试")
-            };
-            p.text(
-                c + Vec2::new(0.0, 18.0),
-                Align2::CENTER_CENTER,
-                line1,
-                FontId::proportional(12.0),
-                col,
-            );
-            p.text(
-                c + Vec2::new(0.0, 40.0),
-                Align2::CENTER_CENTER,
-                line2,
-                FontId::proportional(10.0),
-                t.text_faint,
-            );
-        }
-    }
-    // Home indicator
-    p.rect_filled(
-        Rect::from_min_size(
-            p2(rect.center().x - 28.0, rect.max.y - 8.0),
-            Vec2::new(56.0, 3.0),
-        ),
-        2.0,
-        Color32::from_rgb(0x5C, 0x68, 0x84),
     );
 }
 

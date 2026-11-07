@@ -8,4 +8,5 @@ description = "egui 单二进制控制台：真实启停转发引擎 + design/ui
 eframe = { workspace = true }
 egui = { workspace = true }
 rusqlite = { workspace = true }
+image = { workspace = true }
 bridge-core = { path = "../bridge-core" }
