@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = ["crates/bridge-core", "crates/bridge-gui", "crates/bridge-setup"]
+
+[workspace.package]
+version = "0.3.0"
+edition = "2021"
+rust-version = "1.85"
+
+[workspace.dependencies]
+md-5 = "0.10"
+eframe = "0.37"
+egui = "0.37"
+rusqlite = { version = "0.41", features = ["bundled"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

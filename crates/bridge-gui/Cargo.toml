@@ -1,0 +1,11 @@
+[package]
+name = "bridge-gui"
+version.workspace = true
+edition.workspace = true
+description = "egui 单二进制控制台：真实启停转发引擎 + design/ui-mockup.html 视觉稿落地"
+
+[dependencies]
+eframe = { workspace = true }
+egui = { workspace = true }
+rusqlite = { workspace = true }
+bridge-core = { path = "../bridge-core" }

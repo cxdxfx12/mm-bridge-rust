@@ -1,0 +1,12 @@
+[package]
+name = "bridge-setup"
+version.workspace = true
+edition.workspace = true
+build = "build.rs"
+description = "Rust 独立版自解压安装器：释放 GUI + 内置 Python 转发引擎、创建快捷方式与卸载入口"
+
+# 只用两个纯 Rust、无 C 依赖的小 crate 解 raw deflate / 校验 CRC，
+# 安装器仍是单个原生 exe，不需要 vcruntime 或 .NET。
+[dependencies]
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+crc32fast = "1"

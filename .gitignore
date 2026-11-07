@@ -1,0 +1,24 @@
+# Cargo 编译产物（rebuild 即可，体积 4 GB，绝不入库）
+/target
+**/*.rs.bk
+
+# 安装包与自解压归档：单文件 150 MB+，超过 GitHub 100 MB 硬限制。
+# 两者都由 assets/pack_backend.py --all 本地重新生成，见 README。
+/dist
+/assets/backend.mmb1
+*.exe
+*.pdb
+
+# 运行态数据、日志与本机配置（可能含真实凭证 / 绝对路径）
+/data
+/config.yaml
+startup.log
+crash.log
+*.log
+app/_env.json
+
+# 临时排障脚本与截图
+.tmp/
+tmpd/
+Thumbs.db
+desktop.ini

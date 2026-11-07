@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>喵喵钉钉-微信消息转发桥 · 界面重设计视觉稿</title>
+<style>
+/* =========================================================================
+   00 · DESIGN TOKENS —— 给 Rust GUI 实现的唯一数据源（:root）
+   颜色 / 字号 / 间距 / 圆角 / 阴影 / 边框 / 动效时长
+   浅色主题（light）：所有 surface 均为浅色，文字为深色，保证对比度 AA。
+   ========================================================================= */
+:root{
+  /* ---- 主色 Primary（沿用原 ACCENT #2f6be4，微调为更克制的靛蓝） ---- */
+  --c-primary-50:#EEF3FE;  --c-primary-100:#DCE8FD; --c-primary-200:#BBD2FB;
+  --c-primary-300:#8FB6F7; --c-primary-400:#5C93F0; --c-primary-500:#2F6BED;
+  --c-primary-600:#2456C8; --c-primary-700:#1B419B;
+  --c-primary:var(--c-primary-500);
+  --c-primary-hover:var(--c-primary-600);
+  --c-primary-active:var(--c-primary-700);
+  --c-primary-soft:var(--c-primary-50);
+  --c-on-primary:#FFFFFF;
+
+  /* ---- 成功 Success ---- */
+  --c-success-50:#E9F7EF; --c-success-100:#CFEEDC; --c-success-500:#0F9D58;
+  --c-success-600:#0B7E46; --c-success:var(--c-success-500);
+  /* ---- 警告 Warning ---- */
+  --c-warning-50:#FFF5DA; --c-warning-100:#FCE7B2; --c-warning-500:#D99000;
+  --c-warning-600:#A96E00; --c-warning-fg:#8A6100; --c-warning:var(--c-warning-500);
+  /* ---- 危险 Danger ---- */
+  --c-danger-50:#FDECEC; --c-danger-100:#F9D0D1; --c-danger-500:#E5484D;
+  --c-danger-600:#C7363B; --c-danger:var(--c-danger-500);
+  /* ---- 信息 Info（日志 / 链接级别，独立于主色的冷灰蓝） ---- */
+  --c-info-50:#EEF2FB; --c-info-500:#5C6884;
+
+  /* ---- 中性色阶 Neutral（浅底深字） ---- */
+  --c-n0:#FFFFFF;  --c-n50:#FBFCFE; --c-n100:#F7F9FC; --c-n150:#F1F4F9;
+  --c-n200:#EEF1F7; --c-n300:#E2E7F0; --c-n400:#CBD5E6; --c-n500:#A7B2C6;
+  --c-n600:#7A869E; --c-n700:#5C6884; --c-n800:#39445E; --c-n900:#1C2740;
+  --c-n950:#16203A;
+
+  /* ---- 语义背景 / 文字 / 边框 ---- */
+  --bg-app:#EEF1F7;          /* 应用最底：窗口外桌面 + 主区底 */
+  --bg-surface:#FFFFFF;      /* 卡片 / 面板 / 弹层 */
+  --bg-surface-2:#F8FAFD;    /* 次级面：表头、输入框、导航底 */
+  --bg-subtle:#F1F4F9;       /* 填充块、斑马纹、代码块 */
+  --bg-hover:#F1F5FC;        /* 悬停态 */
+  --bg-header:#FFFFFF;       /* 自定义标题栏（浅色，遵守硬性约束） */
+  --bg-sidebar:#F7F9FC;      /* 左侧导航 */
+  --bg-topbar:#FBFCFE;       /* 顶部状态条 */
+
+  --text-strong:#16203A;     /* 标题 / 关键数值 */
+  --text:#1C2740;            /* 正文 */
+  --text-muted:#5C6884;      /* 次要说明 */
+  --text-faint:#8A96AE;      /* 占位 / 禁用 / 脚注 */
+  --text-on-dark:#FFFFFF;
+
+  --border:#E2E7F0;          /* 常规 1px 描边 */
+  --border-strong:#CBD5E6;   /* 输入框 / 强调描边 */
+  --border-subtle:#EEF1F7;   /* 内分隔线 */
+  --focus-ring:rgba(47,107,237,.22);
+
+  /* ---- 字号 Typography ---- */
+  --font-sans:"Microsoft YaHei UI","Microsoft YaHei","Source Han Sans SC","Noto Sans CJK SC","PingFang SC","Segoe UI",sans-serif;
+  --font-mono:"Cascadia Mono","Consolas","Sarasa Mono SC","JetBrains Mono","Microsoft YaHei UI",monospace; /* 日志/时间/数字等宽 */
+  --fs-11:11px; --fs-12:12px; --fs-13:13px; --fs-14:14px;
+  --fs-16:16px; --fs-18:18px; --fs-20:20px; --fs-24:24px;
+  --fs-30:30px; --fs-38:38px;
+  --lh-tight:1.25; --lh-normal:1.55; --lh-loose:1.75;
+  --fw-regular:400; --fw-medium:500; --fw-semibold:600; --fw-bold:700;
+
+  /* ---- 间距梯度 Spacing（4px 基准） ---- */
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px;
+  --sp-5:20px; --sp-6:24px; --sp-8:32px; --sp-10:40px; --sp-12:48px;
+
+  /* ---- 圆角 Radius ---- */
+  --r-xs:4px; --r-sm:6px; --r-md:10px; --r-lg:14px; --r-xl:20px; --r-full:999px;
+
+  /* ---- 阴影 Shadow（浅色柔和，Y 向偏移，不用重黑） ---- */
+  --shadow-xs:0 1px 2px rgba(28,39,64,.05);
+  --shadow-sm:0 2px 8px rgba(28,39,64,.06),0 1px 2px rgba(28,39,64,.04);
+  --shadow-md:0 8px 24px rgba(28,39,64,.09),0 2px 6px rgba(28,39,64,.05);
+  --shadow-lg:0 20px 56px rgba(28,39,64,.14),0 4px 12px rgba(28,39,64,.06);
+  --shadow-focus:0 0 0 3px var(--focus-ring);
+
+  /* ---- 动效 Motion ---- */
+  --dur-fast:120ms; --dur-base:180ms; --dur-slow:260ms;
+  --ease:cubic-bezier(.2,.7,.3,1);
+  --ease-out:cubic-bezier(.16,1,.3,1);
+
+  /* ---- 尺寸（工程栅格） ---- */
+  --h-titlebar:46px; --h-topbar:68px; --h-banner:34px; --h-bottombar:58px;
+  --w-sidebar:216px; --w-phone:308px; --h-control:34px; --h-control-lg:38px;
+}
+
+/* =========================================================================
+   01 · RESET & 展示页框架（设计稿本身的画布，不属于产品界面）
+   ========================================================================= */
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--font-sans); color:var(--text); background:var(--bg-app);
+  font-size:var(--fs-14); line-height:var(--lh-normal);
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+.ic{width:18px;height:18px;display:inline-block;vertical-align:middle;flex:none;
+  stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ic-14{width:14px;height:14px}.ic-16{width:16px;height:16px}
+.ic-20{width:20px;height:20px}.ic-24{width:24px;height:24px}.ic-28{width:28px;height:28px}
+
+.page{max-width:1280px;margin:0 auto;padding:var(--sp-10) var(--sp-6) 96px}
+.page-head{
+  background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-sm);padding:var(--sp-8) var(--sp-8) var(--sp-6);margin-bottom:var(--sp-8);
+  position:relative;overflow:hidden;
+}
+.page-head::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;
+  background:linear-gradient(180deg,var(--c-primary-500),var(--c-primary-300))}
+.eyebrow{font-size:var(--fs-12);letter-spacing:.14em;color:var(--c-primary-600);
+  font-weight:var(--fw-semibold);text-transform:uppercase;margin-bottom:var(--sp-3)}
+.page-head h1{font-size:var(--fs-30);font-weight:var(--fw-bold);color:var(--text-strong);
+  letter-spacing:-.01em;line-height:var(--lh-tight)}
+.page-head .sub{color:var(--text-muted);font-size:var(--fs-14);margin-top:var(--sp-3);max-width:900px}
+.head-meta{display:flex;flex-wrap:wrap;gap:var(--sp-2);margin-top:var(--sp-5)}
+.head-meta span{font-size:var(--fs-12);color:var(--text-muted);background:var(--bg-subtle);
+  border:1px solid var(--border);border-radius:var(--r-full);padding:5px 12px}
+
+.toc{display:flex;flex-wrap:wrap;gap:var(--sp-2);margin-bottom:var(--sp-10)}
+.toc a{font-size:var(--fs-13);color:var(--text-muted);text-decoration:none;
+  border:1px solid var(--border);background:var(--bg-surface);border-radius:var(--r-sm);
+  padding:7px 13px;transition:all var(--dur-fast) var(--ease)}
+.toc a:hover{color:var(--c-primary-600);border-color:var(--c-primary-200);background:var(--c-primary-50)}
+
+.section{margin-bottom:var(--sp-12);scroll-margin-top:var(--sp-6)}
+.sec-head{display:flex;align-items:baseline;gap:var(--sp-3);margin-bottom:var(--sp-2);
+  padding-bottom:var(--sp-3);border-bottom:1px solid var(--border)}
+.sec-no{font-family:var(--font-mono);font-size:var(--fs-13);color:var(--c-primary-500);
+  font-weight:var(--fw-bold);letter-spacing:.05em}
+.sec-head h2{font-size:var(--fs-20);font-weight:var(--fw-bold);color:var(--text-strong)}
+.sec-head .en{font-size:var(--fs-12);color:var(--text-faint);letter-spacing:.06em;font-family:var(--font-mono)}
+.sec-desc{color:var(--text-muted);font-size:var(--fs-13);margin:var(--sp-3) 0 var(--sp-6);max-width:960px}
+
+.card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-md);
+  box-shadow:var(--shadow-xs)}
+.card-pad{padding:var(--sp-5)}
+.grid{display:grid;gap:var(--sp-4)}
+.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}.g5{grid-template-columns:repeat(5,1fr)}
+.mono{font-family:var(--font-mono)}
+.tag{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-12);
+  font-weight:var(--fw-medium);border-radius:var(--r-full);padding:3px 10px;line-height:1.5}
+.lbl{font-size:var(--fs-12);color:var(--text-muted);font-weight:var(--fw-semibold)}
+.hr{height:1px;background:var(--border-subtle);border:0;margin:var(--sp-5) 0}
+
+/* =========================================================================
+   02 · 设计系统展示件
+   ========================================================================= */
+.swatch-row{display:flex;flex-direction:column;gap:var(--sp-2)}
+.swatch{height:52px;border-radius:var(--r-sm);border:1px solid rgba(28,39,64,.07);
+  display:flex;align-items:flex-end;justify-content:flex-end;padding:6px}
+.swatch .hex{font-family:var(--font-mono);font-size:var(--fs-11);
+  background:rgba(255,255,255,.86);color:var(--text-strong);border-radius:3px;padding:1px 5px}
+.swatch-name{font-size:var(--fs-12);color:var(--text-muted);text-align:center;margin-top:5px}
+.scale-title{font-size:var(--fs-13);font-weight:var(--fw-semibold);color:var(--text);margin-bottom:var(--sp-3)}
+.type-sample{display:flex;flex-direction:column;gap:var(--sp-4)}
+.type-line{display:flex;align-items:baseline;justify-content:space-between;gap:var(--sp-4);
+  border-bottom:1px dashed var(--border-subtle);padding-bottom:var(--sp-3)}
+.type-line:last-child{border-bottom:0}
+.type-line .spec{font-family:var(--font-mono);font-size:var(--fs-11);color:var(--text-faint);white-space:nowrap}
+.specimen-row{display:flex;flex-wrap:wrap;gap:var(--sp-4);align-items:flex-end}
+.spec-box{background:var(--bg-surface-2);border:1px solid var(--border);display:flex;
+  align-items:center;justify-content:center;color:var(--text-muted);font-family:var(--font-mono);font-size:var(--fs-11)}
+.icon-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:var(--sp-2)}
+.icon-cell{display:flex;flex-direction:column;align-items:center;gap:8px;padding:var(--sp-3) 4px;
+  border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);background:var(--bg-surface);
+  transition:all var(--dur-fast) var(--ease)}
+.icon-cell:hover{color:var(--c-primary-600);border-color:var(--c-primary-200);background:var(--c-primary-50)}
+.icon-cell .name{font-size:var(--fs-11);color:var(--text-faint);font-family:var(--font-mono)}
+.note{font-size:var(--fs-12);color:var(--text-muted);line-height:var(--lh-loose)}
+
+/* =========================================================================
+   03 · 主窗口 MOCKUP 1440×900
+   ========================================================================= */
+.mock-stage{display:flex;justify-content:center;overflow-x:auto;padding:var(--sp-6) 0 var(--sp-4)}
+.window{
+  width:1440px;height:900px;flex:none;background:var(--bg-app);
+  border:1px solid var(--border-strong);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden;
+}
+.stage-hint{text-align:center;font-size:var(--fs-12);color:var(--text-faint);margin-top:var(--sp-2)}
+
+/* --- 自定义标题栏 --- */
+.titlebar{height:var(--h-titlebar);flex:none;background:var(--bg-header);
+  border-bottom:1px solid var(--border);display:flex;align-items:center;
+  padding:0 var(--sp-3) 0 var(--sp-4);gap:var(--sp-3)}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{width:26px;height:26px;border-radius:8px;
+  background:linear-gradient(135deg,var(--c-primary-500),var(--c-primary-700));
+  display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:var(--shadow-xs)}
+.brand-mark .ic{width:16px;height:16px;stroke-width:2}
+.brand-title{font-size:var(--fs-13);font-weight:var(--fw-semibold);color:var(--text-strong)}
+.brand-ver{font-family:var(--font-mono);font-size:var(--fs-11);color:var(--text-faint);
+  background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--r-xs);padding:1px 6px}
+.titlebar .spacer{flex:1}
+.tb-crumb{display:flex;align-items:center;gap:8px;font-size:var(--fs-12);color:var(--text-muted)}
+.tb-crumb .sep{color:var(--c-n400)}
+.win-ctrls{display:flex;align-items:center;gap:2px;margin-left:var(--sp-3)}
+.win-btn{width:38px;height:30px;border:0;background:transparent;color:var(--text-muted);
+  border-radius:var(--r-xs);display:flex;align-items:center;justify-content:center;cursor:default;
+  transition:all var(--dur-fast) var(--ease)}
+.win-btn:hover{background:var(--bg-hover);color:var(--text)}
+.win-btn.close:hover{background:var(--c-danger-50);color:var(--c-danger-600)}
+
+/* --- 顶部状态条 --- */
+.topbar{height:var(--h-topbar);flex:none;background:var(--bg-topbar);
+  border-bottom:1px solid var(--border);display:flex;align-items:center;
+  padding:0 var(--sp-5);gap:var(--sp-5)}
+.status-chips{display:flex;gap:var(--sp-2);flex:none}
+.chip{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;
+  background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-full);
+  font-size:var(--fs-12);color:var(--text);white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;position:relative}
+.dot.ok{background:var(--c-success-500);box-shadow:0 0 0 3px var(--c-success-50)}
+.dot.warn{background:var(--c-warning-500);box-shadow:0 0 0 3px var(--c-warning-50)}
+.dot.err{background:var(--c-danger-500);box-shadow:0 0 0 3px var(--c-danger-50)}
+.dot.idle{background:var(--c-n400);box-shadow:0 0 0 3px var(--c-n150)}
+.dot.pulse::after{content:"";position:absolute;inset:-4px;border-radius:50%;
+  border:1.5px solid var(--c-success-500);opacity:.55;animation:pulse 2s infinite}
+@keyframes pulse{0%{transform:scale(.7);opacity:.6}100%{transform:scale(1.7);opacity:0}}
+.chip b{font-weight:var(--fw-semibold);color:var(--text-strong)}
+.chip .k{color:var(--text-faint)}
+
+.session-box{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.session-box .k{font-size:var(--fs-11);color:var(--text-faint);letter-spacing:.04em}
+.session-line{display:flex;align-items:center;gap:8px;font-size:var(--fs-13);
+  color:var(--text);min-width:0}
+.session-line .src{font-weight:var(--fw-semibold);color:var(--text-strong);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:330px}
+.session-line .arrow{color:var(--c-primary-500)}
+.session-line .dst{color:var(--c-primary-700);font-weight:var(--fw-medium);white-space:nowrap}
+.today-count{display:flex;flex-direction:column;gap:2px;flex:none;padding:0 var(--sp-4);
+  border-left:1px solid var(--border);border-right:1px solid var(--border)}
+.today-count .num{font-family:var(--font-mono);font-size:var(--fs-20);font-weight:var(--fw-bold);
+  color:var(--c-primary-600);line-height:1}
+.today-count .k{font-size:var(--fs-11);color:var(--text-faint)}
+.top-actions{display:flex;align-items:center;gap:var(--sp-2);flex:none}
+kbd{font-family:var(--font-mono);font-size:var(--fs-11);border:1px solid var(--border-strong);
+  border-bottom-width:2px;border-radius:var(--r-xs);padding:1px 5px;background:var(--bg-surface);
+  color:var(--text-muted)}
+
+/* --- 按钮（产品级，全站复用） --- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  height:var(--h-control);padding:0 14px;border-radius:var(--r-sm);
+  font-family:var(--font-sans);font-size:var(--fs-13);font-weight:var(--fw-medium);
+  border:1px solid transparent;cursor:pointer;white-space:nowrap;
+  transition:background var(--dur-fast) var(--ease),border-color var(--dur-fast) var(--ease),
+             color var(--dur-fast) var(--ease),box-shadow var(--dur-fast) var(--ease),
+             transform var(--dur-fast) var(--ease)}
+.btn:active{transform:translateY(1px)}
+.btn .ic{width:15px;height:15px}
+.btn-primary{background:var(--c-primary);color:var(--c-on-primary);box-shadow:var(--shadow-xs)}
+.btn-primary:hover{background:var(--c-primary-hover)}
+.btn-danger{background:var(--c-danger);color:#fff;box-shadow:var(--shadow-xs)}
+.btn-danger:hover{background:var(--c-danger-600)}
+.btn-secondary{background:var(--bg-surface);color:var(--text);border-color:var(--border-strong)}
+.btn-secondary:hover{background:var(--bg-hover);border-color:var(--c-primary-300);color:var(--c-primary-600)}
+.btn-ghost{background:transparent;color:var(--text-muted)}
+.btn-ghost:hover{background:var(--bg-hover);color:var(--text)}
+.btn-disabled,.btn:disabled{background:var(--c-n150);color:var(--c-n500);
+  border-color:var(--border);box-shadow:none;cursor:not-allowed;pointer-events:none}
+.btn-lg{height:var(--h-control-lg);padding:0 18px;font-size:var(--fs-14);font-weight:var(--fw-semibold)}
+
+/* --- 试运行告警条 --- */
+.banner{height:var(--h-banner);flex:none;background:var(--c-warning-50);
+  border-bottom:1px solid var(--c-warning-100);display:flex;align-items:center;
+  padding:0 var(--sp-5);gap:10px;color:var(--c-warning-fg);font-size:var(--fs-12)}
+.banner .ic{color:var(--c-warning-600);width:16px;height:16px}
+.banner .close{margin-left:auto;color:var(--c-warning-fg);opacity:.7;cursor:pointer}
+.banner .close:hover{opacity:1}
+
+/* --- 窗口主体三列 --- */
+.app-body{flex:1;min-height:0;display:flex}
+.sidebar{width:var(--w-sidebar);flex:none;background:var(--bg-sidebar);
+  border-right:1px solid var(--border);display:flex;flex-direction:column;padding:var(--sp-4) var(--sp-3)}
+.nav-cap{font-size:var(--fs-11);color:var(--text-faint);letter-spacing:.1em;
+  padding:0 var(--sp-3) var(--sp-2);text-transform:uppercase}
+.nav{display:flex;flex-direction:column;gap:4px}
+.nav-item{display:flex;align-items:center;gap:11px;height:40px;padding:0 var(--sp-3);
+  border-radius:var(--r-sm);color:var(--text-muted);font-size:var(--fs-13);
+  text-decoration:none;position:relative;transition:all var(--dur-fast) var(--ease)}
+.nav-item .ic{width:18px;height:18px}
+.nav-item:hover{background:var(--bg-hover);color:var(--text)}
+.nav-item.active{background:var(--c-primary-50);color:var(--c-primary-700);font-weight:var(--fw-semibold)}
+.nav-item.active::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;
+  border-radius:0 3px 3px 0;background:var(--c-primary-500)}
+.nav-item .badge{margin-left:auto;font-family:var(--font-mono);font-size:var(--fs-11);
+  background:var(--c-danger-50);color:var(--c-danger-600);border-radius:var(--r-full);padding:1px 7px}
+.side-foot{margin-top:auto;background:var(--bg-surface);border:1px solid var(--border);
+  border-radius:var(--r-md);padding:var(--sp-3)}
+.side-foot .row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.side-foot .k{font-size:var(--fs-11);color:var(--text-faint)}
+.side-foot .v{font-size:var(--fs-12);font-weight:var(--fw-semibold);color:var(--text)}
+.side-foot .hr{margin:9px 0}
+.side-foot .copy{font-size:var(--fs-11);color:var(--text-faint);font-family:var(--font-mono);line-height:1.5}
+
+/* --- 中间主区 --- */
+.main{flex:1;min-width:0;padding:var(--sp-5);display:flex;flex-direction:column;gap:var(--sp-4);
+  overflow:hidden;background:var(--bg-app)}
+.main-head{display:flex;align-items:center;justify-content:space-between;flex:none}
+.main-head h3{font-size:var(--fs-18);font-weight:var(--fw-bold);color:var(--text-strong)}
+.main-head .crumb{font-size:var(--fs-12);color:var(--text-muted);margin-top:2px}
+.segmented{display:inline-flex;background:var(--bg-subtle);border:1px solid var(--border);
+  border-radius:var(--r-sm);padding:3px;gap:2px}
+.segmented span{font-size:var(--fs-12);padding:5px 12px;border-radius:var(--r-xs);color:var(--text-muted);cursor:default}
+.segmented span.on{background:var(--bg-surface);color:var(--c-primary-700);
+  font-weight:var(--fw-semibold);box-shadow:var(--shadow-xs)}
+
+/* KPI 卡 */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--sp-4);flex:none}
+.kpi{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-md);
+  box-shadow:var(--shadow-xs);padding:var(--sp-4);position:relative;overflow:hidden;
+  transition:box-shadow var(--dur-base) var(--ease),transform var(--dur-base) var(--ease)}
+.kpi:hover{box-shadow:var(--shadow-md);transform:translateY(-2px)}
+.kpi::after{content:"";position:absolute;right:-24px;top:-24px;width:90px;height:90px;
+  border-radius:50%;background:var(--accent-soft,var(--c-primary-50));opacity:.6}
+.kpi .top{display:flex;align-items:center;justify-content:space-between;position:relative;z-index:1}
+.kpi .label{font-size:var(--fs-12);color:var(--text-muted)}
+.kpi .ico{width:30px;height:30px;border-radius:var(--r-sm);display:flex;align-items:center;
+  justify-content:center;color:var(--accent,var(--c-primary-600));background:var(--accent-soft,var(--c-primary-50))}
+.kpi .num{font-family:var(--font-mono);font-size:var(--fs-30);font-weight:var(--fw-bold);
+  color:var(--text-strong);line-height:1.1;margin:var(--sp-3) 0 6px;position:relative;z-index:1}
+.kpi .num small{font-size:var(--fs-13);font-weight:var(--fw-medium);color:var(--text-faint);margin-left:4px}
+.kpi .foot{font-size:var(--fs-11);color:var(--text-faint);display:flex;align-items:center;gap:6px;position:relative;z-index:1}
+.kpi .trend.up{color:var(--c-success-600)}.kpi .trend.flat{color:var(--text-faint)}
+
+/* 面板通用头 */
+.panel{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-md);
+  box-shadow:var(--shadow-xs);display:flex;flex-direction:column;min-height:0}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);
+  padding:var(--sp-3) var(--sp-4);border-bottom:1px solid var(--border-subtle);flex:none}
+.panel-title{display:flex;align-items:center;gap:9px;font-size:var(--fs-14);
+  font-weight:var(--fw-semibold);color:var(--text-strong)}
+.panel-title .ic{color:var(--c-primary-600)}
+.panel-tools{display:flex;align-items:center;gap:var(--sp-2)}
+.mini-btn{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;font-size:var(--fs-12);
+  color:var(--text-muted);background:var(--bg-surface);border:1px solid var(--border);
+  border-radius:var(--r-xs);cursor:pointer;transition:all var(--dur-fast) var(--ease)}
+.mini-btn:hover{color:var(--c-primary-600);border-color:var(--c-primary-200);background:var(--c-primary-50)}
+.pill-count{font-family:var(--font-mono);font-size:var(--fs-11);color:var(--text-muted);
+  background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--r-full);padding:2px 8px}
+
+/* 表格 */
+.tbl-wrap{overflow:auto}
+table.tbl{width:100%;border-collapse:collapse;font-size:var(--fs-12)}
+.tbl thead th{position:sticky;top:0;background:var(--bg-surface-2);color:var(--text-muted);
+  font-weight:var(--fw-semibold);text-align:left;padding:9px 14px;border-bottom:1px solid var(--border);
+  white-space:nowrap;font-size:var(--fs-11);letter-spacing:.02em}
+.tbl tbody td{padding:9px 14px;border-bottom:1px solid var(--border-subtle);color:var(--text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+.tbl tbody tr{transition:background var(--dur-fast) var(--ease)}
+.tbl tbody tr:hover{background:var(--bg-hover)}
+.tbl tbody tr:last-child td{border-bottom:0}
+.tbl .t-time{font-family:var(--font-mono);color:var(--text-muted)}
+.tbl .t-strong{font-weight:var(--fw-medium);color:var(--text-strong)}
+.tbl .t-muted{color:var(--text-faint)}
+.tbl .t-content{color:var(--text);max-width:300px}
+
+/* 状态徽标 */
+.badge-s{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-11);font-weight:var(--fw-medium);
+  border-radius:var(--r-full);padding:3px 10px;border:1px solid transparent;white-space:nowrap}
+.badge-s .d{width:6px;height:6px;border-radius:50%}
+.badge-s.ok{background:var(--c-success-50);color:var(--c-success-600);border-color:var(--c-success-100)}
+.badge-s.ok .d{background:var(--c-success-500)}
+.badge-s.info{background:var(--c-primary-50);color:var(--c-primary-700);border-color:var(--c-primary-100)}
+.badge-s.info .d{background:var(--c-primary-500)}
+.badge-s.warn{background:var(--c-warning-50);color:var(--c-warning-fg);border-color:var(--c-warning-100)}
+.badge-s.warn .d{background:var(--c-warning-500)}
+.badge-s.err{background:var(--c-danger-50);color:var(--c-danger-600);border-color:var(--c-danger-100)}
+.badge-s.err .d{background:var(--c-danger-500)}
+.badge-s.neutral{background:var(--bg-subtle);color:var(--text-muted);border-color:var(--border)}
+.badge-s.neutral .d{background:var(--c-n500)}
+
+/* 实时日志 */
+.log-body{font-family:var(--font-mono);font-size:var(--fs-12);line-height:1.9;
+  padding:var(--sp-3) var(--sp-4);overflow:auto;background:var(--bg-surface)}
+.log-line{display:flex;gap:var(--sp-3);white-space:nowrap}
+.log-line .ts{color:var(--text-faint);flex:none}
+.log-line .lv{flex:none;width:52px;font-weight:var(--fw-bold)}
+.log-line .msg{color:var(--text);white-space:pre-wrap;word-break:break-all}
+.lv-INFO{color:var(--c-primary-600)}.lv-SYS{color:var(--text-muted)}
+.lv-TOOL{color:#7C5CC4}.lv-WARN{color:var(--c-warning-600)}.lv-ERROR{color:var(--c-danger-600)}
+.log-line.warn .msg{color:var(--c-warning-fg)}
+.log-line.error .msg{color:var(--c-danger-600)}
+
+.main-split{display:grid;grid-template-columns:1.35fr 1fr;gap:var(--sp-4);flex:1;min-height:0}
+
+/* --- 右侧「手机画面」投屏面板 --- */
+.phone-col{width:var(--w-phone);flex:none;background:var(--bg-surface);
+  border-left:1px solid var(--border);padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-3)}
+.phone-head{display:flex;align-items:center;justify-content:space-between}
+.phone-head .t{display:flex;align-items:center;gap:8px;font-size:var(--fs-14);
+  font-weight:var(--fw-semibold);color:var(--text-strong)}
+.phone-head .t .ic{color:var(--c-primary-600)}
+.live-toggle{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-12);color:var(--text-muted)}
+.phone-screen{position:relative;border-radius:var(--r-lg);border:1px solid var(--border-strong);
+  background:linear-gradient(180deg,#F4F7FC,#EAF0F9);overflow:hidden;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  box-shadow:inset 0 1px 3px rgba(28,39,64,.06)}
+.phone-notch{position:absolute;top:8px;left:50%;transform:translateX(-50%);
+  width:74px;height:16px;border-radius:var(--r-full);background:#1C2740;opacity:.82;z-index:2}
+.phone-mock{width:150px;margin:34px 0 20px;background:#fff;border:3px solid #26324D;
+  border-radius:20px;padding:8px 9px 12px;box-shadow:var(--shadow-md)}
+.pm-top{display:flex;justify-content:space-between;font-size:6px;color:#8A96AE;font-family:var(--font-mono)}
+.pm-title{font-size:8px;font-weight:700;color:#1C2740;text-align:center;margin:10px 0 8px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pm-bubble{background:#EEF3FE;border:1px solid #DCE8FD;border-radius:7px;padding:6px 7px;margin-bottom:6px}
+.pm-bubble .s{font-size:6px;color:#5C6884;font-weight:600}
+.pm-bubble .c{font-size:6.5px;color:#1C2740;line-height:1.5;margin-top:2px}
+.pm-bubble.alt{background:#F1F4F9;border-color:#E2E7F0}
+.pm-table{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;margin-top:5px}
+.pm-table i{display:block;height:5px;background:#DCE8FD;border-radius:1px}
+.pm-input{display:flex;align-items:center;gap:5px;margin-top:9px;border-top:1px solid #EEF1F7;padding-top:7px}
+.pm-input .box{flex:1;height:11px;background:#F7F9FC;border:1px solid #E2E7F0;border-radius:4px}
+.pm-input .send{width:22px;height:11px;background:var(--c-primary-500);border-radius:4px}
+.phone-meta{font-family:var(--font-mono);font-size:var(--fs-11);color:var(--text-muted);
+  text-align:center;line-height:1.7}
+.phone-meta b{color:var(--c-success-600)}
+.phone-ctrls{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.pbtn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:30px;padding:0 10px;
+  font-size:var(--fs-12);color:var(--text);background:var(--bg-surface);
+  border:1px solid var(--border-strong);border-radius:var(--r-sm);cursor:pointer;
+  transition:all var(--dur-fast) var(--ease)}
+.pbtn:hover{background:var(--c-primary-50);border-color:var(--c-primary-200);color:var(--c-primary-700)}
+.pbtn .ic{width:14px;height:14px}
+.phone-status{font-size:var(--fs-11);color:var(--text-muted);background:var(--bg-surface-2);
+  border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px;line-height:1.6}
+.phone-status .ok{color:var(--c-success-600);font-weight:var(--fw-semibold)}
+
+/* --- 底部操作栏 --- */
+.bottombar{height:var(--h-bottombar);flex:none;background:var(--bg-surface);
+  border-top:1px solid var(--border);display:flex;align-items:center;
+  padding:0 var(--sp-5);gap:var(--sp-4)}
+.bottom-actions{display:flex;align-items:center;gap:7px;flex-wrap:nowrap}
+.bottom-status{margin-left:auto;display:flex;align-items:center;gap:var(--sp-4);
+  font-size:var(--fs-12);color:var(--text-muted);white-space:nowrap}
+.bottom-status .run{display:inline-flex;align-items:center;gap:7px;color:var(--c-success-600);font-weight:var(--fw-medium)}
+.bottom-status .meta{display:flex;flex-direction:column;gap:2px;text-align:right}
+.bottom-status .meta .v{font-family:var(--font-mono);color:var(--text)}
+.bottom-status .meta .c{font-family:var(--font-mono);font-size:var(--fs-11);color:var(--text-faint)}
+
+/* =========================================================================
+   04 · 手机画面 · 三种状态（主窗口下方专项展示）
+   ========================================================================= */
+.phone-states{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-4)}
+.state-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-md);
+  box-shadow:var(--shadow-xs);overflow:hidden;display:flex;flex-direction:column}
+.state-head{display:flex;align-items:center;justify-content:space-between;padding:var(--sp-3) var(--sp-4);
+  border-bottom:1px solid var(--border-subtle)}
+.state-head .t{font-size:var(--fs-13);font-weight:var(--fw-semibold);color:var(--text-strong)}
+.state-stage{height:230px;display:flex;align-items:center;justify-content:center;padding:var(--sp-4);
+  background:var(--bg-surface-2)}
+.state-mini{width:112px;height:200px;border:3px solid #26324D;border-radius:18px;background:#fff;
+  padding:6px 7px 10px;box-shadow:var(--shadow-sm);position:relative;overflow:hidden}
+.state-mini .notch{position:absolute;top:5px;left:50%;transform:translateX(-50%);
+  width:40px;height:8px;border-radius:99px;background:#26324D;opacity:.8}
+.mini-line{height:6px;border-radius:2px;background:var(--c-n150);margin:8px 0}
+.mini-bub{background:var(--c-primary-50);border:1px solid var(--c-primary-100);border-radius:6px;
+  height:34px;margin:7px 0;padding:5px}
+.mini-bub span{display:block;height:5px;border-radius:2px;background:var(--c-primary-200);margin-bottom:4px}
+.mini-bub.alt{background:var(--bg-subtle);border-color:var(--border)}
+.mini-bub.alt span{background:var(--c-n300)}
+.state-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  width:100%;height:100%;text-align:center}
+.state-empty .ring{width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.state-empty .ring svg{width:28px;height:28px}
+.state-empty .msg{font-size:var(--fs-13);font-weight:var(--fw-semibold);color:var(--text-strong)}
+.state-empty .desc{font-size:var(--fs-12);color:var(--text-muted);max-width:230px;line-height:1.6}
+.ring.warn{background:var(--c-warning-50);color:var(--c-warning-600);border:1px solid var(--c-warning-100)}
+.ring.err{background:var(--c-danger-50);color:var(--c-danger-600);border:1px solid var(--c-danger-100)}
+.ring.ok{background:var(--c-success-50);color:var(--c-success-600);border:1px solid var(--c-success-100)}
+.state-foot{padding:var(--sp-3) var(--sp-4);font-size:var(--fs-12);color:var(--text-muted);line-height:1.65;
+  border-top:1px solid var(--border-subtle)}
+.state-foot code{font-family:var(--font-mono);font-size:var(--fs-11);color:var(--c-primary-700);
+  background:var(--c-primary-50);padding:1px 5px;border-radius:3px}
+
+/* =========================================================================
+   05 · 组件规范展示件
+   ========================================================================= */
+.comp-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-md);
+  box-shadow:var(--shadow-xs);padding:var(--sp-5)}
+.comp-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp-4)}
+.comp-title .name{font-size:var(--fs-14);font-weight:var(--fw-semibold);color:var(--text-strong)}
+.comp-title .num{font-family:var(--font-mono);font-size:var(--fs-11);color:var(--c-primary-600);
+  background:var(--c-primary-50);border-radius:var(--r-xs);padding:2px 7px}
+.demo{display:flex;flex-wrap:wrap;gap:var(--sp-3);align-items:center}
+.demo-col{display:flex;flex-direction:column;gap:var(--sp-3);align-items:flex-start}
+.field-label{font-size:var(--fs-12);font-weight:var(--fw-medium);color:var(--text);margin-bottom:6px;display:block}
+.field-hint{font-size:var(--fs-11);color:var(--text-faint);margin-top:6px}
+
+/* 输入框 */
+.input{height:var(--h-control);width:220px;padding:0 11px;font-size:var(--fs-13);
+  font-family:var(--font-sans);color:var(--text);background:var(--bg-surface);
+  border:1px solid var(--border-strong);border-radius:var(--r-sm);outline:none;
+  transition:border-color var(--dur-fast) var(--ease),box-shadow var(--dur-fast) var(--ease)}
+.input::placeholder{color:var(--text-faint)}
+.input:hover{border-color:var(--c-primary-300)}
+.input:focus{border-color:var(--c-primary-500);box-shadow:var(--shadow-focus)}
+.input:disabled,.input.is-disabled{background:var(--c-n150);color:var(--c-n500);
+  border-color:var(--border);cursor:not-allowed}
+.input.is-error{border-color:var(--c-danger-500);box-shadow:0 0 0 3px var(--c-danger-50)}
+.err-text{display:flex;align-items:center;gap:5px;font-size:var(--fs-11);color:var(--c-danger-600);margin-top:6px}
+.input-wrap{position:relative;display:inline-flex;align-items:center}
+.input-wrap .lead{position:absolute;left:11px;color:var(--text-faint);display:flex}
+.input-wrap.has-lead .input{padding-left:34px}
+.input-wrap .tail{position:absolute;right:10px;color:var(--text-faint);display:flex}
+
+/* 下拉框 */
+.select{position:relative;width:230px}
+.select select{appearance:none;width:100%;height:var(--h-control);padding:0 34px 0 11px;
+  font-family:var(--font-sans);font-size:var(--fs-13);color:var(--text);background:var(--bg-surface);
+  border:1px solid var(--border-strong);border-radius:var(--r-sm);outline:none;cursor:pointer;
+  transition:border-color var(--dur-fast) var(--ease),box-shadow var(--dur-fast) var(--ease)}
+.select select:hover{border-color:var(--c-primary-300)}
+.select select:focus{border-color:var(--c-primary-500);box-shadow:var(--shadow-focus)}
+.select .chev{position:absolute;right:10px;top:50%;transform:translateY(-50%);
+  color:var(--text-muted);pointer-events:none}
+.select select:disabled{background:var(--c-n150);color:var(--c-n500);cursor:not-allowed}
+
+/* 开关 */
+.switch{display:inline-flex;align-items:center;gap:10px;cursor:pointer;font-size:var(--fs-13);color:var(--text)}
+.switch input{position:absolute;opacity:0;width:0;height:0}
+.switch .track{width:40px;height:22px;border-radius:var(--r-full);background:var(--c-n400);
+  position:relative;transition:background var(--dur-base) var(--ease);flex:none}
+.switch .track::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;
+  border-radius:50%;background:#fff;box-shadow:var(--shadow-xs);
+  transition:transform var(--dur-base) var(--ease-out)}
+.switch input:checked + .track{background:var(--c-primary-500)}
+.switch input:checked + .track::after{transform:translateX(18px)}
+.switch input:focus-visible + .track{box-shadow:var(--shadow-focus)}
+.switch input:disabled + .track{background:var(--c-n300);cursor:not-allowed}
+
+/* 复选 / 单选 */
+.check,.radio{display:inline-flex;align-items:center;gap:9px;cursor:pointer;font-size:var(--fs-13);color:var(--text)}
+.check input,.radio input{position:absolute;opacity:0;width:0;height:0}
+.check .box,.radio .circle{width:17px;height:17px;flex:none;background:var(--bg-surface);
+  border:1.5px solid var(--border-strong);transition:all var(--dur-fast) var(--ease);position:relative}
+.check .box{border-radius:var(--r-xs)}
+.radio .circle{border-radius:50%}
+.check input:checked + .box{background:var(--c-primary-500);border-color:var(--c-primary-500)}
+.check input:checked + .box::after{content:"";position:absolute;left:5px;top:1px;width:4px;height:9px;
+  border:solid #fff;border-width:0 2px 2px 0;transform:rotate(42deg)}
+.radio input:checked + .circle{border-color:var(--c-primary-500)}
+.radio input:checked + .circle::after{content:"";position:absolute;inset:3.5px;border-radius:50%;
+  background:var(--c-primary-500)}
+.check input:focus-visible + .box,.radio input:focus-visible + .circle{box-shadow:var(--shadow-focus)}
+.check input:disabled + .box,.radio input:disabled + .circle{background:var(--c-n150);border-color:var(--border)}
+
+/* 标签页 */
+.tabs{border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;max-width:640px}
+.tab-bar{display:flex;background:var(--bg-surface-2);border-bottom:1px solid var(--border);padding:0 var(--sp-2);gap:2px}
+.tab-item{padding:10px 16px;font-size:var(--fs-13);color:var(--text-muted);cursor:default;
+  border-bottom:2px solid transparent;transition:all var(--dur-fast) var(--ease)}
+.tab-item:hover{color:var(--text)}
+.tab-item.on{color:var(--c-primary-700);font-weight:var(--fw-semibold);border-bottom-color:var(--c-primary-500)}
+.tab-body{padding:var(--sp-4);font-size:var(--fs-13);color:var(--text-muted);line-height:1.7}
+
+/* 进度条 */
+.progress{height:8px;border-radius:var(--r-full);background:var(--c-n150);overflow:hidden;width:260px}
+.progress .fill{height:100%;border-radius:var(--r-full);background:var(--c-primary-500);
+  display:flex;align-items:center;justify-content:flex-end;transition:width var(--dur-slow) var(--ease)}
+.progress.ok .fill{background:var(--c-success-500)}
+.progress.warn .fill{background:var(--c-warning-500)}
+.progress.err .fill{background:var(--c-danger-500)}
+.progress.striped .fill{background-image:linear-gradient(45deg,rgba(255,255,255,.28) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.28) 50%,rgba(255,255,255,.28) 75%,transparent 75%,transparent);background-size:16px 16px;animation:barber 1s linear infinite}
+@keyframes barber{to{background-position:16px 0}}
+.prog-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.prog-row .pct{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--text-muted);width:38px}
+
+/* Toast */
+.toast{display:flex;align-items:flex-start;gap:11px;width:330px;padding:12px 14px;
+  background:var(--bg-surface);border:1px solid var(--border);border-left-width:3px;
+  border-radius:var(--r-sm);box-shadow:var(--shadow-md)}
+.toast .ic{margin-top:1px}
+.toast .tt{font-size:var(--fs-13);font-weight:var(--fw-semibold);color:var(--text-strong)}
+.toast .td{font-size:var(--fs-12);color:var(--text-muted);margin-top:2px;line-height:1.5}
+.toast .tx{margin-left:auto;color:var(--text-faint);cursor:pointer}
+.toast.ok{border-left-color:var(--c-success-500)}.toast.ok .ic{color:var(--c-success-600)}
+.toast.info{border-left-color:var(--c-primary-500)}.toast.info .ic{color:var(--c-primary-600)}
+.toast.warn{border-left-color:var(--c-warning-500)}.toast.warn .ic{color:var(--c-warning-600)}
+.toast.err{border-left-color:var(--c-danger-500)}.toast.err .ic{color:var(--c-danger-600)}
+
+/* 空状态 */
+.empty-demo{border:1px dashed var(--border-strong);border-radius:var(--r-md);
+  padding:var(--sp-8);display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;
+  background:var(--bg-surface-2)}
+.empty-demo .ring{width:56px;height:56px;border-radius:50%;background:var(--c-primary-50);
+  color:var(--c-primary-500);display:flex;align-items:center;justify-content:center}
+.empty-demo .t{font-size:var(--fs-14);font-weight:var(--fw-semibold);color:var(--text-strong)}
+.empty-demo .d{font-size:var(--fs-12);color:var(--text-muted);max-width:300px;line-height:1.6}
+
+/* 加载中 spinner */
+.spinner{width:15px;height:15px;border-radius:50%;border:2px solid rgba(255,255,255,.45);
+  border-top-color:#fff;animation:spin .7s linear infinite;display:inline-block}
+.spinner.sec{border-color:var(--c-primary-100);border-top-color:var(--c-primary-600)}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* =========================================================================
+   06 · 交互状态矩阵
+   ========================================================================= */
+.matrix-scroll{overflow-x:auto}
+.state-matrix{display:grid;grid-template-columns:110px repeat(5,1fr);gap:1px;
+  min-width:820px;background:var(--border);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
+.sm-cell{background:var(--bg-surface);padding:var(--sp-3);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:8px;min-height:78px}
+.sm-cell.head{background:var(--bg-surface-2);font-size:var(--fs-12);font-weight:var(--fw-semibold);
+  color:var(--text-muted);min-height:40px}
+.sm-cell.rowhead{align-items:flex-start;justify-content:center;background:var(--bg-surface-2);
+  font-size:var(--fs-13);font-weight:var(--fw-semibold);color:var(--text)}
+.sm-cell .cap{font-family:var(--font-mono);font-size:var(--fs-11);color:var(--text-faint)}
+/* 强制态（静态演示 focus / active / error / loading） */
+.btn.is-focus{box-shadow:var(--shadow-focus);border-color:var(--c-primary-500)}
+.btn.is-active{transform:translateY(1px);filter:brightness(.94)}
+.input.is-focus{border-color:var(--c-primary-500);box-shadow:var(--shadow-focus)}
+
+/* =========================================================================
+   07 · Token 表 / 代码块 / 规范正文
+   ========================================================================= */
+.token-table{width:100%;border-collapse:collapse;font-size:var(--fs-12)}
+.token-table th{text-align:left;background:var(--bg-surface-2);color:var(--text-muted);
+  font-weight:var(--fw-semibold);padding:9px 12px;border-bottom:1px solid var(--border);font-size:var(--fs-11)}
+.token-table td{padding:8px 12px;border-bottom:1px solid var(--border-subtle);color:var(--text)}
+.token-table td.k{font-family:var(--font-mono);color:var(--c-primary-700);white-space:nowrap}
+.token-table td.v{font-family:var(--font-mono);color:var(--text-strong);white-space:nowrap}
+.token-table tr:hover td{background:var(--bg-hover)}
+.code{background:var(--bg-subtle);color:var(--text);border-radius:var(--r-md);padding:var(--sp-5);
+  font-family:var(--font-mono);font-size:var(--fs-12);line-height:1.7;overflow:auto;
+  box-shadow:var(--shadow-xs);border:1px solid var(--border-strong)}
+.code .cm{color:var(--text-faint)}.code .sel{color:var(--c-primary-700);font-weight:var(--fw-semibold)}
+.code .prop{color:var(--c-success-600)}
+.code .val{color:#A96E00}.code .var{color:var(--c-primary-600)}
+.prose{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-md);
+  box-shadow:var(--shadow-xs);padding:var(--sp-6)}
+.prose h3{font-size:var(--fs-16);font-weight:var(--fw-bold);color:var(--text-strong);
+  margin:var(--sp-5) 0 var(--sp-2);display:flex;align-items:center;gap:9px}
+.prose h3:first-child{margin-top:0}
+.prose h3 .n{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--c-primary-600);
+  background:var(--c-primary-50);border-radius:var(--r-xs);padding:2px 8px}
+.prose p{font-size:var(--fs-13);color:var(--text-muted);line-height:var(--lh-loose);margin-bottom:var(--sp-2)}
+.prose strong{color:var(--text);font-weight:var(--fw-semibold)}
+.prose ul{margin:6px 0 var(--sp-3) var(--sp-5)}
+.prose li{font-size:var(--fs-13);color:var(--text-muted);line-height:var(--lh-loose);margin-bottom:4px}
+.prose code{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--c-primary-700);
+  background:var(--c-primary-50);padding:1px 5px;border-radius:3px}
+.callout{display:flex;gap:11px;background:var(--c-primary-50);border:1px solid var(--c-primary-100);
+  border-radius:var(--r-sm);padding:var(--sp-3) var(--sp-4);margin-top:var(--sp-4)}
+.callout .ic{color:var(--c-primary-600);flex:none;margin-top:2px}
+.callout p{font-size:var(--fs-12);color:var(--c-primary-700);margin:0}
+
+.footer{text-align:center;font-size:var(--fs-12);color:var(--text-faint);
+  border-top:1px solid var(--border);padding-top:var(--sp-6);margin-top:var(--sp-8)}
+.footer b{color:var(--text-muted)}
+
+/* 窄屏兜底：mockup 允许横向滚动，其余自适应 */
+@media(max-width:1100px){
+  .g5{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(2,1fr)}
+  .g3,.phone-states{grid-template-columns:repeat(2,1fr)}
+  .icon-grid{grid-template-columns:repeat(6,1fr)}
+}
+@media(max-width:720px){
+  .g2,.g3,.g4,.g5,.phone-states{grid-template-columns:1fr}
+  .page{padding:var(--sp-5) var(--sp-4) 64px}
+  .icon-grid{grid-template-columns:repeat(4,1fr)}
+}
+</style>
+</head>
+<body>
+
+<!-- =========================================================================
+     SVG 图标精灵（内联，零外链）—— 统一 24 网格 / 1.7px 线宽 / 圆角端点 / currentColor
+     ========================================================================= -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></symbol>
+  <symbol id="i-route" viewBox="0 0 24 24"><circle cx="5" cy="6" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="M7.2 6H14a3 3 0 0 1 3 3v6.8"/><path d="M5 8.2v4a3 3 0 0 0 3 3h8.8"/></symbol>
+  <symbol id="i-clipboard" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M8.5 13.5l2.2 2.2 4.8-5"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h7M15 7h5M4 17h11M19 17h1"/><circle cx="13" cy="7" r="2"/><circle cx="17" cy="17" r="2"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.2 6"/><path d="M20 5v6h-6"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></symbol>
+  <symbol id="i-chev-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></symbol>
+  <symbol id="i-chev-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M10 18h4"/><path d="M10 5h4"/></symbol>
+  <symbol id="i-usb" viewBox="0 0 24 24"><path d="M12 21v-7"/><rect x="9" y="3" width="6" height="5" rx="1"/><path d="M12 8v6M9.5 12L12 14.5 14.5 12"/><circle cx="12" cy="19" r="1"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></symbol>
+  <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3L2.5 20h19L12 3z"/><path d="M12 9v5"/><circle cx="12" cy="17.2" r=".7"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7.5" r=".7"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-x-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M4.5 5h15l1.5 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h4"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6h6l2 2h10v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.6"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+  <symbol id="i-transfer" viewBox="0 0 24 24"><path d="M4 8h15"/><path d="M15 4l4 4-4 4"/><path d="M20 16H5"/><path d="M9 12l-4 4 4 4"/></symbol>
+  <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+  <symbol id="i-min" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-max" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M9 15l6-6"/><path d="M7.5 10.5l-1.8 1.8a3.2 3.2 0 0 0 4.5 4.5l1.8-1.8"/><path d="M16.5 13.5l1.8-1.8a3.2 3.2 0 0 0-4.5-4.5l-1.8 1.8"/></symbol>
+</svg>
+
+<div class="page">
+
+  <!-- ======================== 00 页头 ======================== -->
+  <header class="page-head">
+    <div class="eyebrow">UI REDESIGN · HIGH-FIDELITY MOCKUP · v1.0</div>
+    <h1>喵喵钉钉-微信消息转发桥 · 界面重设计视觉稿</h1>
+    <p class="sub">面向 Windows 桌面工具的高保真、可落地界面方案。浅色主题、语义化设计 Token，
+      全部文案取自现有 <span class="mono">gui.py / settings_ui.py / phone_panel.py / README.md</span> 的真实功能，
+      供 Rust GUI（Tauri / egui / slint）重写时直接对照实现。</p>
+    <div class="head-meta">
+      <span>浅色主题 · Light</span><span>1440 × 900 主窗口</span>
+      <span>零外链 · 单文件自包含</span><span>内联 SVG 线条图标</span>
+      <span>主色 #2F6BED</span><span>中文 微软雅黑 / 日志等宽</span>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <a href="#s1">01 设计系统</a><a href="#s2">02 主窗口 Mockup</a>
+    <a href="#s3">03 手机画面三态</a><a href="#s4">04 组件规范</a>
+    <a href="#s5">05 交互状态</a><a href="#s6">06 Rust 设计 Token</a>
+    <a href="#s7">07 中文设计规范</a>
+  </nav>
+
+  <!-- ======================== 01 设计系统 ======================== -->
+  <section class="section" id="s1">
+    <div class="sec-head"><span class="sec-no">01</span><h2>设计系统</h2>
+      <span class="en">Design System</span></div>
+    <p class="sec-desc">配色全部为浅底深字；语义色用于状态，不用于大面积背景。以下色值即 <span class="mono">:root</span> 中的真实变量，工程师可直接取用。</p>
+
+    <div class="grid g2">
+      <!-- 主色 / 语义色 -->
+      <div class="card card-pad">
+        <div class="scale-title">主色 Primary（品牌延续自原 <span class="mono">#2f6be4</span>）</div>
+        <div class="grid" style="grid-template-columns:repeat(7,1fr);gap:8px">
+          <div class="swatch-row"><div class="swatch" style="background:#EEF3FE"><span class="hex">50</span></div><div class="swatch-name">50</div></div>
+          <div class="swatch-row"><div class="swatch" style="background:#DCE8FD"><span class="hex">100</span></div><div class="swatch-name">100</div></div>
+          <div class="swatch-row"><div class="swatch" style="background:#BBD2FB"><span class="hex">200</span></div><div class="swatch-name">200</div></div>
+          <div class="swatch-row"><div class="swatch" style="background:#8FB6F7"><span class="hex">300</span></div><div class="swatch-name">300</div></div>
+          <div class="swatch-row"><div class="swatch" style="background:#5C93F0"><span class="hex">400</span></div><div class="swatch-name">400</div></div>
+          <div class="swatch-row"><div class="swatch" style="background:#2F6BED"><span class="hex" style="color:#fff;background:rgba(0,0,0,.25)">500</span></div><div class="swatch-name">500 主色</div></div>
+          <div class="swatch-row"><div class="swatch" style="background:#1B419B"><span class="hex" style="color:#fff;background:rgba(0,0,0,.25)">700</span></div><div class="swatch-name">700</div></div>
+        </div>
+        <div class="hr"></div>
+        <div class="scale-title">语义色 Semantic（浅底 + 深字，对比度达标）</div>
+        <div class="grid g4">
+          <div><div class="swatch" style="background:#0F9D58;height:40px"></div><div class="swatch-name">成功 #0F9D58</div></div>
+          <div><div class="swatch" style="background:#D99000;height:40px"></div><div class="swatch-name">警告 #D99000</div></div>
+          <div><div class="swatch" style="background:#E5484D;height:40px"></div><div class="swatch-name">危险 #E5484D</div></div>
+          <div><div class="swatch" style="background:#5C6884;height:40px"></div><div class="swatch-name">信息 #5C6884</div></div>
+        </div>
+        <div class="grid g4" style="margin-top:10px">
+          <div><div class="swatch" style="background:#E9F7EF;height:26px"></div><div class="swatch-name">成功浅底 #E9F7EF</div></div>
+          <div><div class="swatch" style="background:#FFF5DA;height:26px"></div><div class="swatch-name">警告浅底 #FFF5DA</div></div>
+          <div><div class="swatch" style="background:#FDECEC;height:26px"></div><div class="swatch-name">危险浅底 #FDECEC</div></div>
+          <div><div class="swatch" style="background:#EEF3FE;height:26px"></div><div class="swatch-name">主色浅底 #EEF3FE</div></div>
+        </div>
+      </div>
+
+      <!-- 中性色阶 -->
+      <div class="card card-pad">
+        <div class="scale-title">中性色阶 Neutral（浅色主题基底，10 阶）</div>
+        <div class="grid" style="grid-template-columns:repeat(5,1fr);gap:8px">
+          <div><div class="swatch" style="background:#FFFFFF;height:42px"></div><div class="swatch-name">#FFFFFF</div></div>
+          <div><div class="swatch" style="background:#F8FAFD;height:42px"></div><div class="swatch-name">#F8FAFD</div></div>
+          <div><div class="swatch" style="background:#F1F4F9;height:42px"></div><div class="swatch-name">#F1F4F9</div></div>
+          <div><div class="swatch" style="background:#EEF1F7;height:42px"></div><div class="swatch-name">#EEF1F7</div></div>
+          <div><div class="swatch" style="background:#E2E7F0;height:42px"></div><div class="swatch-name">#E2E7F0</div></div>
+          <div><div class="swatch" style="background:#CBD5E6;height:42px"></div><div class="swatch-name">#CBD5E6</div></div>
+          <div><div class="swatch" style="background:#A7B2C6;height:42px"></div><div class="swatch-name">#A7B2C6</div></div>
+          <div><div class="swatch" style="background:#5C6884;height:42px"><span class="hex" style="color:#fff;background:rgba(0,0,0,.2)">文字</span></div><div class="swatch-name">#5C6884</div></div>
+          <div><div class="swatch" style="background:#1C2740;height:42px"><span class="hex" style="color:#fff;background:rgba(0,0,0,.2)">正文</span></div><div class="swatch-name">#1C2740</div></div>
+          <div><div class="swatch" style="background:#16203A;height:42px"><span class="hex" style="color:#fff;background:rgba(0,0,0,.2)">标题</span></div><div class="swatch-name">#16203A</div></div>
+        </div>
+        <div class="hr"></div>
+        <div class="scale-title">字体 Typography</div>
+        <div class="type-sample">
+          <div class="type-line"><span style="font-size:24px;font-weight:700;color:#16203A">运行总览 Overview</span><span class="spec">24/30 · 700 · --fs-24</span></div>
+          <div class="type-line"><span style="font-size:16px;font-weight:600;color:#1C2740">今日转发 128 条</span><span class="spec">16 · 600 · --fs-16</span></div>
+          <div class="type-line"><span style="font-size:14px;color:#1C2740">把钉钉群消息按规则转发到微信群</span><span class="spec">14 · 400 · 正文</span></div>
+          <div class="type-line"><span style="font-size:12px;color:#5C6884">窗口被最小化时程序会自动还原</span><span class="spec">12 · 400 · 说明</span></div>
+          <div class="type-line"><span class="mono" style="font-size:13px;color:#1C2740">[09:42:17] INFO 识别到 1 条新消息</span><span class="spec">13 · 等宽 · 日志</span></div>
+        </div>
+        <p class="note" style="margin-top:12px">中文优先 <span class="mono">Microsoft YaHei UI / 微软雅黑</span>，回退思源黑体、苹方；日志、时间戳、计数、Token 一律等宽（Cascadia Mono / Consolas / 更纱黑体）。</p>
+      </div>
+    </div>
+
+    <div class="grid g2" style="margin-top:16px">
+      <!-- 圆角 / 间距 / 阴影 / 边框 -->
+      <div class="card card-pad">
+        <div class="scale-title">圆角 Radius</div>
+        <div class="specimen-row" style="margin-bottom:18px">
+          <div class="spec-box" style="width:56px;height:56px;border-radius:4px">4</div>
+          <div class="spec-box" style="width:56px;height:56px;border-radius:6px">6</div>
+          <div class="spec-box" style="width:56px;height:56px;border-radius:10px">10</div>
+          <div class="spec-box" style="width:56px;height:56px;border-radius:14px">14</div>
+          <div class="spec-box" style="width:56px;height:56px;border-radius:20px">20</div>
+          <div class="spec-box" style="width:70px;height:56px;border-radius:999px">999</div>
+        </div>
+        <div class="scale-title">间距梯度 Spacing（4px 基准）</div>
+        <div style="display:flex;align-items:flex-end;gap:10px;margin-bottom:18px">
+          <div style="text-align:center"><div style="width:4px;height:34px;background:#2F6BED"></div><span class="spec" style="font-size:10px">4</span></div>
+          <div style="text-align:center"><div style="width:8px;height:34px;background:#2F6BED"></div><span class="spec" style="font-size:10px">8</span></div>
+          <div style="text-align:center"><div style="width:12px;height:34px;background:#2F6BED"></div><span class="spec" style="font-size:10px">12</span></div>
+          <div style="text-align:center"><div style="width:16px;height:34px;background:#2F6BED"></div><span class="spec" style="font-size:10px">16</span></div>
+          <div style="text-align:center"><div style="width:24px;height:34px;background:#2F6BED"></div><span class="spec" style="font-size:10px">24</span></div>
+          <div style="text-align:center"><div style="width:32px;height:34px;background:#2F6BED"></div><span class="spec" style="font-size:10px">32</span></div>
+          <div style="text-align:center"><div style="width:48px;height:34px;background:#2F6BED"></div><span class="spec" style="font-size:10px">48</span></div>
+        </div>
+        <div class="scale-title">阴影 Shadow（Y 向柔和，不用重黑）</div>
+        <div class="specimen-row">
+          <div class="spec-box" style="width:90px;height:50px;border-radius:10px;box-shadow:var(--shadow-xs);background:#fff">xs</div>
+          <div class="spec-box" style="width:90px;height:50px;border-radius:10px;box-shadow:var(--shadow-sm);background:#fff">sm</div>
+          <div class="spec-box" style="width:90px;height:50px;border-radius:10px;box-shadow:var(--shadow-md);background:#fff">md</div>
+          <div class="spec-box" style="width:90px;height:50px;border-radius:10px;box-shadow:var(--shadow-lg);background:#fff">lg</div>
+        </div>
+        <p class="note" style="margin-top:14px">边框统一 <span class="mono">1px</span>：<span class="mono">--border #E2E7F0</span> 常规、<span class="mono">--border-strong #CBD5E6</span> 输入框、<span class="mono">--border-subtle</span> 内分隔。聚焦环 <span class="mono">0 0 0 3px rgba(47,107,237,.22)</span>。</p>
+      </div>
+
+      <!-- 图标风格 -->
+      <div class="card card-pad">
+        <div class="scale-title">图标风格 Iconography（内联 SVG · 统一线性）</div>
+        <div class="icon-grid">
+          <div class="icon-cell"><svg class="ic ic-24"><use href="#i-grid"/></svg><span class="name">总览</span></div>
+          <div class="icon-cell"><svg class="ic ic-24"><use href="#i-list"/></svg><span class="name">流水</span></div>
+          <div class="icon-cell"><svg class="ic ic-24"><use href="#i-route"/></svg><span class="name">规则</span></div>
+          <div class="icon-cell"><svg class="ic ic-24"><use href="#i-clipboard"/></svg><span class="name">对账</span></div>
+          <div class="icon-cell"><svg class="ic ic-24"><use href="#i-sliders"/></svg><span class="name">设置</span></div>
+          <div class="icon-cell"><svg class="ic ic-24"><use href="#i-play"/></svg><span class="name">启动</span></div>
+          <div class="icon-cell"><svg class="ic ic-24"><use href="#i-stop"/></svg><span class="name">停止</span></div>
+          <div class="icon-cell"><svg class="ic ic-24"><use href="#i-refresh"/></svg><span class="name">自检</span></div>
+          <div class="icon-cell"><svg class="ic ic-24"><use href="#i-phone"/></svg><span class="name">手机</span></div>
+          <div class="icon-cell"><svg class="ic ic-24"><use href="#i-usb"/></svg><span class="name">USB</span></div>
+          <div class="icon-cell"><svg class="ic ic-24"><use href="#i-check-circle"/></svg><span class="name">成功</span></div>
+          <div class="icon-cell"><svg class="ic ic-24"><use href="#i-alert"/></svg><span class="name">告警</span></div>
+          <div class="icon-cell"><svg class="ic ic-24"><use href="#i-trend"/></svg><span class="name">趋势</span></div>
+          <div class="icon-cell"><svg class="ic ic-24"><use href="#i-clock"/></svg><span class="name">时长</span></div>
+          <div class="icon-cell"><svg class="ic ic-24"><use href="#i-download"/></svg><span class="name">存图</span></div>
+          <div class="icon-cell"><svg class="ic ic-24"><use href="#i-inbox"/></svg><span class="name">空状态</span></div>
+        </div>
+        <p class="note" style="margin-top:14px">规范：<span class="mono">24×24</span> 网格、<span class="mono">stroke-width 1.7</span>、圆角端点与转折、<span class="mono">fill:none</span>、<span class="mono">stroke:currentColor</span>（随文字色继承）。全部内联为 <span class="mono">&lt;symbol&gt;</span> 精灵，<span class="mono">&lt;use&gt;</span> 复用，零外链零图标库。不使用 emoji，状态点用纯 CSS 圆绘制。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================== 02 主窗口 MOCKUP ======================== -->
+  <section class="section" id="s2">
+    <div class="sec-head"><span class="sec-no">02</span><h2>主窗口高保真 Mockup</h2>
+      <span class="en">Main Window · 1440×900</span></div>
+    <p class="sec-desc">分区：自定义标题栏 → 顶部状态条（连接状态灯 / 当前会话 / 今日转发 / F5·F6 主按钮）→ 左侧导航 → 中间主区（KPI / 消息流水 / 实时日志）→ 右侧「手机画面」投屏面板 → 底部操作栏与状态提示。当前演示「运行中」态：按 <span class="mono">gui.py</span> 规则，同一时刻仅一个实心彩色主按钮可用（启动禁用、停止可点）。</p>
+
+    <div class="mock-stage">
+      <div class="window">
+
+        <!-- 自定义标题栏 -->
+        <div class="titlebar">
+          <div class="brand">
+            <span class="brand-mark"><svg class="ic"><use href="#i-transfer"/></svg></span>
+            <span class="brand-title">喵喵钉钉-微信消息转发桥</span>
+            <span class="brand-ver">v0.63</span>
+          </div>
+          <div class="spacer"></div>
+          <div class="tb-crumb"><svg class="ic ic-14"><use href="#i-grid"/></svg>运行总览<span class="sep">/</span>正式运行</div>
+          <div class="win-ctrls">
+            <span class="win-btn"><svg class="ic ic-14"><use href="#i-min"/></svg></span>
+            <span class="win-btn"><svg class="ic ic-14"><use href="#i-max"/></svg></span>
+            <span class="win-btn close"><svg class="ic ic-14"><use href="#i-x"/></svg></span>
+          </div>
+        </div>
+
+        <!-- 顶部状态条 -->
+        <div class="topbar">
+          <div class="status-chips">
+            <span class="chip"><span class="dot ok pulse"></span><span class="k">运行</span><b>运行中</b></span>
+            <span class="chip"><span class="dot ok"></span><span class="k">采集端</span><b>正常</b></span>
+            <span class="chip"><span class="dot ok"></span><span class="k">投递端</span><b>正常</b></span>
+          </div>
+          <div class="session-box">
+            <span class="k">当前会话 · 数据来源 手机钉钉 · 无障碍</span>
+            <span class="session-line">
+              <span class="src">【数字质控】浙江杭州萧山区大江东公司</span>
+              <svg class="ic ic-14 arrow"><use href="#i-transfer"/></svg>
+              <span class="dst">申通五星业务员培训群</span>
+            </span>
+          </div>
+          <div class="today-count"><span class="num">128</span><span class="k">今日转发</span></div>
+          <div class="top-actions">
+            <button class="btn btn-disabled" title="运行中不可重复启动" disabled><svg class="ic"><use href="#i-play"/></svg>F5 启动</button>
+            <button class="btn btn-danger btn-lg"><svg class="ic"><use href="#i-stop"/></svg>F6 停止</button>
+            <button class="btn btn-secondary" title="自检"><svg class="ic"><use href="#i-refresh"/></svg>自检</button>
+            <button class="btn btn-ghost" title="通知"><svg class="ic"><use href="#i-bell"/></svg></button>
+          </div>
+        </div>
+
+        <!-- 试运行提示条（真实存在的 dry-run 状态） -->
+        <div class="banner">
+          <svg class="ic"><use href="#i-alert"/></svg>
+          当前是【试运行】模式：只会打印、不会真的发到微信。确认无误后到「设置」里取消试运行。
+          <svg class="ic close ic-16"><use href="#i-x"/></svg>
+        </div>
+
+        <!-- 主体三列 -->
+        <div class="app-body">
+
+          <!-- 左侧导航 -->
+          <aside class="sidebar">
+            <div class="nav-cap">工作台</div>
+            <nav class="nav">
+              <a class="nav-item active" href="#"><svg class="ic"><use href="#i-grid"/></svg>运行总览</a>
+              <a class="nav-item" href="#"><svg class="ic"><use href="#i-list"/></svg>消息流水<span class="badge">6</span></a>
+              <a class="nav-item" href="#"><svg class="ic"><use href="#i-route"/></svg>规则与会话</a>
+              <a class="nav-item" href="#"><svg class="ic"><use href="#i-clipboard"/></svg>漏转对账<span class="badge">1</span></a>
+              <a class="nav-item" href="#"><svg class="ic"><use href="#i-sliders"/></svg>设置中心</a>
+            </nav>
+            <div class="hr"></div>
+            <div class="nav-cap">快捷入口</div>
+            <nav class="nav">
+              <a class="nav-item" href="#"><svg class="ic"><use href="#i-shield"/></svg>启动自检</a>
+              <a class="nav-item" href="#"><svg class="ic"><use href="#i-file"/></svg>导出 CSV</a>
+              <a class="nav-item" href="#"><svg class="ic"><use href="#i-folder"/></svg>数据目录</a>
+            </nav>
+            <div class="side-foot">
+              <div class="row"><span class="k">数据来源</span><span class="v">手机钉钉 · 无障碍</span></div>
+              <div class="hr"></div>
+              <div class="row"><span class="k">网关</span><span class="v mono">0.0.0.0:8765</span></div>
+              <div class="row" style="margin-top:6px"><span class="k">版本</span><span class="v mono">0.63</span></div>
+              <div class="hr"></div>
+              <div class="copy">杭州喵喵至家网络有限公司<br>www.hbdxm.com</div>
+            </div>
+          </aside>
+
+          <!-- 中间主区 -->
+          <main class="main">
+            <div class="main-head">
+              <div><h3>运行总览</h3><div class="crumb">实时监控钉钉 → 微信转发链路 · 每 5 秒刷新</div></div>
+              <div class="segmented"><span class="on">本次运行</span><span>近 7 日</span><span>累计</span></div>
+            </div>
+
+            <!-- KPI 卡片 -->
+            <div class="kpi-grid">
+              <div class="kpi" style="--accent:#2F6BED;--accent-soft:#EEF3FE">
+                <div class="top"><span class="label">今日转发</span><span class="ico"><svg class="ic ic-20"><use href="#i-transfer"/></svg></span></div>
+                <div class="num">128<small>条</small></div>
+                <div class="foot"><span class="trend up"><svg class="ic ic-14"><use href="#i-trend"/></svg>+12%</span> 较昨日同期</div>
+              </div>
+              <div class="kpi" style="--accent:#0F9D58;--accent-soft:#E9F7EF">
+                <div class="top"><span class="label">投递成功率</span><span class="ico"><svg class="ic ic-20"><use href="#i-check-circle"/></svg></span></div>
+                <div class="num">98.4<small>%</small></div>
+                <div class="foot"><span class="trend up"><svg class="ic ic-14"><use href="#i-check"/></svg>稳定</span> 近 7 日 126/128</div>
+              </div>
+              <div class="kpi" style="--accent:#D99000;--accent-soft:#FFF5DA">
+                <div class="top"><span class="label">漏转（对账）</span><span class="ico"><svg class="ic ic-20"><use href="#i-alert"/></svg></span></div>
+                <div class="num">1<small>条</small></div>
+                <div class="foot"><span class="trend flat">待人工补发</span> 卡片标题：出仓进度提醒</div>
+              </div>
+              <div class="kpi" style="--accent:#5C6884;--accent-soft:#EEF2FB">
+                <div class="top"><span class="label">运行时长</span><span class="ico"><svg class="ic ic-20"><use href="#i-clock"/></svg></span></div>
+                <div class="num">06:42<small>:18</small></div>
+                <div class="foot"><span class="trend flat">自 08:30 启动</span> 采集心跳正常</div>
+              </div>
+            </div>
+
+            <!-- 消息流水 + 实时日志 -->
+            <div class="main-split">
+
+              <section class="panel">
+                <div class="panel-head">
+                  <div class="panel-title"><svg class="ic"><use href="#i-list"/></svg>消息流水
+                    <span class="pill-count">近 6 条</span></div>
+                  <div class="panel-tools">
+                    <span class="mini-btn"><svg class="ic ic-14"><use href="#i-search"/></svg>筛选</span>
+                    <span class="mini-btn"><svg class="ic ic-14"><use href="#i-refresh"/></svg>刷新</span>
+                  </div>
+                </div>
+                <div class="tbl-wrap">
+                  <table class="tbl">
+                    <thead><tr><th>时间</th><th>发送者</th><th>内容摘要</th><th>目标会话</th><th>状态</th></tr></thead>
+                    <tbody>
+                      <tr><td class="t-time">09:42</td><td class="t-strong">签收跟单专员 机器人</td><td class="t-content">@所有人【客户声音履约风险提醒】374票</td><td class="t-muted">申通五星业务员培训群</td><td><span class="badge-s ok"><span class="d"></span>已投递</span></td></tr>
+                      <tr><td class="t-time">09:38</td><td class="t-strong">晟约跟单专员 机器人</td><td class="t-content">今日订单 1200 单，已全部发出。</td><td class="t-muted">申通五星业务员培训群</td><td><span class="badge-s ok"><span class="d"></span>已投递</span></td></tr>
+                      <tr><td class="t-time">09:15</td><td class="t-strong">质控播报 机器人</td><td class="t-content">附件：拦截风险明细.xlsx</td><td class="t-muted">申通五星业务员培训群</td><td><span class="badge-s info"><span class="d"></span>附件已转发</span></td></tr>
+                      <tr><td class="t-time">08:57</td><td class="t-strong">签收跟单专员 机器人</td><td class="t-content">@所有人 出仓进度提醒</td><td class="t-muted">申通五星业务员培训群</td><td><span class="badge-s err"><span class="d"></span>投递失败</span></td></tr>
+                      <tr><td class="t-time">08:41</td><td class="t-strong">晟约跟单专员 机器人</td><td class="t-content">昨日 20:01 签收时效汇总</td><td class="t-muted">—</td><td><span class="badge-s neutral"><span class="d"></span>跳过跨天</span></td></tr>
+                      <tr><td class="t-time">08:30</td><td class="t-strong">系统</td><td class="t-content">与上一帧内容重复（uid 命中去重）</td><td class="t-muted">—</td><td><span class="badge-s neutral"><span class="d"></span>重复·拦下</span></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-head">
+                  <div class="panel-title"><svg class="ic"><use href="#i-activity"/></svg>实时日志
+                    <span class="pill-count">自动滚动</span></div>
+                  <div class="panel-tools">
+                    <label class="check" style="font-size:12px"><input type="checkbox" checked><span class="box"></span>自动滚动</label>
+                    <span class="mini-btn">清空</span>
+                  </div>
+                </div>
+                <div class="log-body">
+                  <div class="log-line"><span class="ts">[09:42:17]</span><span class="lv lv-INFO">INFO</span><span class="msg">识别到 1 条新消息 → 已投递 申通五星业务员培训群</span></div>
+                  <div class="log-line"><span class="ts">[09:42:15]</span><span class="lv lv-TOOL">TOOL</span><span class="msg">[手机] 点击 (612, 1840)</span></div>
+                  <div class="log-line"><span class="ts">[09:38:02]</span><span class="lv lv-SYS">SYS</span><span class="msg">工作进程心跳正常，网关 0.0.0.0:8765</span></div>
+                  <div class="log-line warn"><span class="ts">[08:57:41]</span><span class="lv lv-WARN">WARN</span><span class="msg">投递失败 → 微信窗口未就绪，3 秒后重试</span></div>
+                  <div class="log-line"><span class="ts">[08:41:10]</span><span class="lv lv-SYS">SYS</span><span class="msg">丢弃跨天消息（昨天 20:01）</span></div>
+                  <div class="log-line"><span class="ts">[08:30:55]</span><span class="lv lv-INFO">INFO</span><span class="msg">重复消息，跳过（uid 命中去重）</span></div>
+                  <div class="log-line"><span class="ts">[08:30:12]</span><span class="lv lv-SYS">SYS</span><span class="msg">自检通过：采集端与投递端均正常</span></div>
+                  <div class="log-line"><span class="ts">[08:30:01]</span><span class="lv lv-INFO">INFO</span><span class="msg">正在检测运行环境（解释器与依赖）…</span></div>
+                </div>
+              </section>
+            </div>
+          </main>
+
+          <!-- 右侧「手机画面」投屏面板（正常投屏态） -->
+          <aside class="phone-col">
+            <div class="phone-head">
+              <div class="t"><svg class="ic"><use href="#i-phone"/></svg>手机画面</div>
+              <label class="live-toggle"><svg class="ic ic-14"><use href="#i-eye"/></svg>
+                <label class="switch" style="transform:scale(.82);transform-origin:right center"><input type="checkbox" checked><span class="track"></span></label>实时</label>
+            </div>
+
+            <div class="phone-screen" style="flex:1;min-height:0">
+              <div class="phone-notch"></div>
+              <div class="phone-mock">
+                <div class="pm-top"><span>9:42</span><span>100%</span></div>
+                <div class="pm-title">【数字质控】…大江东公司</div>
+                <div class="pm-bubble"><div class="s">签收跟单专员 机器人 09:42</div><div class="c">@所有人【客户声音履约风险提醒】</div><div class="pm-table"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+                <div class="pm-bubble alt"><div class="s">晟约跟单专员 机器人 09:38</div><div class="c">今日订单 1200 单，已全部发出。</div></div>
+                <div class="pm-bubble"><div class="s">质控播报 机器人 09:15</div><div class="c">拦截风险明细.xlsx 已下载</div></div>
+                <div class="pm-input"><div class="box"></div><div class="send"></div></div>
+              </div>
+              <div class="phone-meta"><b>1176×2480</b> · 约 2.2 帧/秒 · 单帧 450 ms</div>
+            </div>
+
+            <div class="phone-ctrls">
+              <span class="pbtn"><svg class="ic"><use href="#i-arrow-left"/></svg>返回</span>
+              <span class="pbtn"><svg class="ic"><use href="#i-home"/></svg>主页</span>
+              <span class="pbtn"><svg class="ic"><use href="#i-chev-up"/></svg>上翻</span>
+              <span class="pbtn"><svg class="ic"><use href="#i-chev-down"/></svg>下翻</span>
+              <span class="pbtn"><svg class="ic"><use href="#i-download"/></svg>存图</span>
+            </div>
+            <div class="phone-status"><span class="ok">画面正常</span> · 点画面=点手机，拖动=滑动，右键=返回。消息转发走 WiFi，与画面链路独立。</div>
+          </aside>
+        </div>
+
+        <!-- 底部操作栏与状态提示 -->
+        <footer class="bottombar">
+          <div class="bottom-actions">
+            <button class="btn btn-secondary"><svg class="ic"><use href="#i-shield"/></svg>自检</button>
+            <button class="btn btn-secondary"><svg class="ic"><use href="#i-route"/></svg>切到钉钉群</button>
+            <button class="btn btn-secondary"><svg class="ic"><use href="#i-eye"/></svg>钉钉预览</button>
+            <button class="btn btn-secondary"><svg class="ic"><use href="#i-transfer"/></svg>转发一条…</button>
+            <button class="btn btn-secondary"><svg class="ic"><use href="#i-list"/></svg>消息记录</button>
+            <button class="btn btn-secondary"><svg class="ic"><use href="#i-download"/></svg>导出 CSV</button>
+            <button class="btn btn-secondary"><svg class="ic"><use href="#i-folder"/></svg>数据目录</button>
+            <button class="btn btn-primary"><svg class="ic"><use href="#i-sliders"/></svg>设置中心</button>
+          </div>
+          <div class="bottom-status">
+            <span class="run"><span class="dot ok"></span>运行中——识别到新消息会自动转发</span>
+            <span class="meta"><span class="v">版本 0.63</span><span class="c">www.hbdxm.com</span></span>
+          </div>
+        </footer>
+      </div>
+    </div>
+    <div class="stage-hint">建议以 ≥ 1500px 浏览器窗口预览；窄屏可横向滚动查看完整 1440×900 主窗口。</div>
+  </section>
+
+  <!-- ======================== 03 手机画面三态 ======================== -->
+  <section class="section" id="s3">
+    <div class="sec-head"><span class="sec-no">03</span><h2>手机画面 · 三种状态</h2>
+      <span class="en">Phone Panel States</span></div>
+    <p class="sec-desc">对应 <span class="mono">phone_panel.py</span> 的真实取帧结果与排障提示。三种状态的失败原因必须画在画布正中（0.63 起的设计约束），且提示转发链路不受影响。</p>
+
+    <div class="phone-states">
+      <!-- 正常投屏 -->
+      <div class="state-card">
+        <div class="state-head"><span class="t">正常投屏</span><span class="badge-s ok"><span class="d"></span>已连接</span></div>
+        <div class="state-stage">
+          <div class="state-mini">
+            <div class="notch"></div>
+            <div class="mini-line" style="margin-top:22px;width:60%"></div>
+            <div class="mini-bub"><span style="width:70%"></span><span style="width:90%"></span></div>
+            <div class="mini-bub alt"><span style="width:55%"></span><span style="width:80%"></span></div>
+            <div class="mini-bub"><span style="width:65%"></span><span style="width:85%"></span></div>
+            <div class="mini-line" style="width:100%;margin-top:14px"></div>
+          </div>
+        </div>
+        <div class="state-foot">状态行：<code>1176×2480 · 约 2.2 帧/秒 · 单帧 450 ms</code>；底部按钮 返回 / 主页 / 上翻 / 下翻 / 存图 可用，画面点击映射 <code>input tap</code>。</div>
+      </div>
+
+      <!-- 无设备 -->
+      <div class="state-card">
+        <div class="state-head"><span class="t">无设备</span><span class="badge-s err"><span class="d"></span>取帧失败</span></div>
+        <div class="state-stage">
+          <div class="state-empty">
+            <div class="ring err"><svg class="ic"><use href="#i-usb"/></svg></div>
+            <div class="msg">取不到手机画面</div>
+            <div class="desc">adb 没找到手机 —— 插 USB 数据线并在手机上点「允许 USB 调试」；或开无线调试后 adb connect IP:端口</div>
+          </div>
+        </div>
+        <div class="state-foot">画布中央红字提示 + 底部状态行。文案：<code>消息转发走 WiFi，不受影响</code>；连上后自动出图。</div>
+      </div>
+
+      <!-- USB 未授权 -->
+      <div class="state-card">
+        <div class="state-head"><span class="t">USB 未授权</span><span class="badge-s warn"><span class="d"></span>待确认</span></div>
+        <div class="state-stage">
+          <div class="state-empty">
+            <div class="ring warn"><svg class="ic"><use href="#i-shield"/></svg></div>
+            <div class="msg">允许 USB 调试？</div>
+            <div class="desc">手机弹了「允许 USB 调试」但没确认 —— 请在手机上点允许。若设备 offline，拔插数据线或执行一次 adb kill-server</div>
+          </div>
+        </div>
+        <div class="state-foot">由 <code>adb devices</code> 的 <code>unauthorized / offline</code> 判定；属可恢复态，用警告色而非危险色，避免误判为链路故障。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================== 04 组件规范 ======================== -->
+  <section class="section" id="s4">
+    <div class="sec-head"><span class="sec-no">04</span><h2>组件规范展示区</h2>
+      <span class="en">Component Spec · 13 类</span></div>
+    <p class="sec-desc">覆盖真实界面用到的全部控件类型。每个组件给出默认态 + 必要变体，文案均取自现有功能。</p>
+
+    <div class="grid g2">
+
+      <!-- 1 按钮 -->
+      <div class="comp-card">
+        <div class="comp-title"><span class="name">01 按钮 Button</span><span class="num">6 变体</span></div>
+        <div class="demo">
+          <button class="btn btn-primary"><svg class="ic"><use href="#i-play"/></svg>F5 启动</button>
+          <button class="btn btn-secondary"><svg class="ic"><use href="#i-refresh"/></svg>自检</button>
+          <button class="btn btn-danger"><svg class="ic"><use href="#i-stop"/></svg>F6 停止</button>
+          <button class="btn btn-ghost">还原本次修改</button>
+          <button class="btn btn-disabled" disabled>切到钉钉群</button>
+          <button class="btn btn-primary" disabled><span class="spinner"></span>启动中…</button>
+        </div>
+        <p class="field-hint">主要 / 次要 / 危险 / 幽灵 / 禁用 / 加载中。禁用态用「浅灰底 + 中灰字 + 细边框」，不靠调淡主色，保证「能不能点」一眼可辨。</p>
+      </div>
+
+      <!-- 2 开关 -->
+      <div class="comp-card">
+        <div class="comp-title"><span class="name">02 开关 Switch</span><span class="num">Toggle</span></div>
+        <div class="demo-col">
+          <label class="switch"><input type="checkbox" checked><span class="track"></span>实时取帧</label>
+          <label class="switch"><input type="checkbox"><span class="track"></span>试运行模式（只打印不发送）</label>
+          <label class="switch"><input type="checkbox" checked><span class="track"></span>锚点防护：不转发滚进来的历史消息</label>
+          <label class="switch"><input type="checkbox" disabled><span class="track"></span>开机自动启动（不可用）</label>
+        </div>
+        <p class="field-hint">对应设置中心「采集与投递 / 转发规则」里的 Checkbutton，替换为更明确的拨动开关。</p>
+      </div>
+
+      <!-- 3 下拉框 -->
+      <div class="comp-card">
+        <div class="comp-title"><span class="name">03 下拉框 Select</span><span class="num">Combobox</span></div>
+        <div class="demo-col" style="width:100%">
+          <div><span class="field-label">数据来源</span>
+            <div class="select"><select><option>手机钉钉 · 无障碍</option><option>PC 钉钉 · 截图识别</option></select><svg class="ic ic-16 chev"><use href="#i-chev-down"/></svg></div></div>
+          <div><span class="field-label">自动巡检</span>
+            <div class="select"><select><option>每 10 分钟</option><option>关闭（不巡检）</option><option>每 5 分钟</option><option>每 30 分钟</option></select><svg class="ic ic-16 chev"><use href="#i-chev-down"/></svg></div></div>
+          <div><span class="field-label">消息保留期（禁用示例）</span>
+            <div class="select"><select disabled><option>保留 90 天（推荐）</option></select><svg class="ic ic-16 chev"><use href="#i-chev-down"/></svg></div></div>
+        </div>
+      </div>
+
+      <!-- 4 输入框 -->
+      <div class="comp-card">
+        <div class="comp-title"><span class="name">04 输入框 Input</span><span class="num">Text Field</span></div>
+        <div class="demo-col" style="width:100%">
+          <div><span class="field-label">访问 token</span><input class="input" value="mm-dd-wx-2026-token" style="width:100%"></div>
+          <div><span class="field-label">监听端口（带前后缀）</span>
+            <span class="input-wrap has-lead"><span class="lead"><svg class="ic ic-16"><use href="#i-link"/></svg></span><input class="input" value="8765"></span>
+          </div>
+          <div><span class="field-label">微信热键（校验失败）</span><input class="input is-error" value="Ctrl+Alt+" style="width:100%">
+            <div class="err-text"><svg class="ic ic-14"><use href="#i-alert"/></svg>请填完整热键，例如 Ctrl+Alt+W</div></div>
+        </div>
+      </div>
+
+      <!-- 5 标签页 -->
+      <div class="comp-card">
+        <div class="comp-title"><span class="name">05 标签页 Tabs</span><span class="num">Notebook</span></div>
+        <div class="tabs">
+          <div class="tab-bar"><span class="tab-item on">转发规则</span><span class="tab-item">时间范围</span><span class="tab-item">采集与投递</span><span class="tab-item">消息格式</span><span class="tab-item">钉钉通知</span><span class="tab-item">其他</span></div>
+          <div class="tab-body">「钉钉群」填群名里能认出的片段即可（做子串匹配，例如「数字质控」）；「微信群」必须与微信客户端里的名字完全一致。改完点右下角「保存」，会先备份原配置。</div>
+        </div>
+        <p class="field-hint">页签文案与 <span class="mono">settings_ui.py</span> 六个页签一致；底部固定「保存 / 取消 / 还原本次修改」。</p>
+      </div>
+
+      <!-- 6 复选框 + 7 单选 -->
+      <div class="comp-card">
+        <div class="comp-title"><span class="name">06–07 复选框 / 单选</span><span class="num">Check · Radio</span></div>
+        <span class="field-label">什么时候才转发</span>
+        <div class="demo-col" style="margin-bottom:16px">
+          <label class="radio"><input type="radio" name="tm"><span class="circle"></span>不限时间</label>
+          <label class="radio"><input type="radio" name="tm" checked><span class="circle"></span>只转发当天消息（推荐）</label>
+          <label class="radio"><input type="radio" name="tm"><span class="circle"></span>只在指定时段转发 08:00-18:00</label>
+        </div>
+        <span class="field-label">告警场景</span>
+        <div class="demo-col">
+          <label class="check"><input type="checkbox" checked><span class="box"></span>采集端异常（窗口被最小化 / 当前不是目标群）</label>
+          <label class="check"><input type="checkbox" checked><span class="box"></span>开始、停止运行时各发一条</label>
+          <label class="check"><input type="checkbox" disabled><span class="box"></span>告警时 @ 所有人（未启用通知）</label>
+        </div>
+      </div>
+
+      <!-- 8 进度条 -->
+      <div class="comp-card">
+        <div class="comp-title"><span class="name">08 进度条 Progress</span><span class="num">Determinate / Indeterminate</span></div>
+        <div class="prog-row"><span class="lbl" style="width:96px">自检进度</span><div class="progress"><div class="fill" style="width:72%"></div></div><span class="pct">72%</span></div>
+        <div class="prog-row"><span class="lbl" style="width:96px">附件下载</span><div class="progress ok"><div class="fill" style="width:100%"></div></div><span class="pct">完成</span></div>
+        <div class="prog-row"><span class="lbl" style="width:96px">清理旧数据</span><div class="progress warn"><div class="fill" style="width:45%"></div></div><span class="pct">45%</span></div>
+        <div class="prog-row"><span class="lbl" style="width:96px">投递重试</span><div class="progress err"><div class="fill" style="width:18%"></div></div><span class="pct">18%</span></div>
+        <div class="prog-row"><span class="lbl" style="width:96px">正在取帧</span><div class="progress striped"><div class="fill" style="width:60%"></div></div><span class="pct">…</span></div>
+        <p class="field-hint">用于自检、附件下载、数据库清理、启动取帧；条纹动画表示「进行中但不知进度」。</p>
+      </div>
+
+      <!-- 9 状态徽标 -->
+      <div class="comp-card">
+        <div class="comp-title"><span class="name">09 状态徽标 Badge</span><span class="num">6 色</span></div>
+        <div class="demo">
+          <span class="badge-s ok"><span class="d"></span>已投递</span>
+          <span class="badge-s info"><span class="d"></span>附件已转发</span>
+          <span class="badge-s warn"><span class="d"></span>重试中</span>
+          <span class="badge-s err"><span class="d"></span>投递失败</span>
+          <span class="badge-s neutral"><span class="d"></span>跳过跨天</span>
+          <span class="badge-s neutral"><span class="d"></span>重复·去重拦下</span>
+          <span class="badge-s err"><span class="d"></span>疑似漏转</span>
+        </div>
+        <p class="field-hint">状态与日志级别一一对应：成功绿 / 附件主色 / 警告琥珀 / 危险红 / 中性灰；「疑似漏转」用危险色以引起对账注意。</p>
+      </div>
+
+      <!-- 10 KPI 卡 -->
+      <div class="comp-card">
+        <div class="comp-title"><span class="name">10 KPI 卡</span><span class="num">Metric Card</span></div>
+        <div class="grid g2" style="gap:12px">
+          <div class="kpi" style="--accent:#2F6BED;--accent-soft:#EEF3FE;box-shadow:var(--shadow-xs)">
+            <div class="top"><span class="label">累计入库消息</span><span class="ico"><svg class="ic ic-20"><use href="#i-database"/></svg></span></div>
+            <div class="num" style="font-size:24px">12,480<small>条</small></div>
+            <div class="foot"><span class="trend flat">data/bridge.db</span></div>
+          </div>
+          <div class="kpi" style="--accent:#0F9D58;--accent-soft:#E9F7EF;box-shadow:var(--shadow-xs)">
+            <div class="top"><span class="label">累计投递成功</span><span class="ico"><svg class="ic ic-20"><use href="#i-check-circle"/></svg></span></div>
+            <div class="num" style="font-size:24px">12,276<small>条</small></div>
+            <div class="foot"><span class="trend up">98.4%</span> 成功率</div>
+          </div>
+        </div>
+        <p class="field-hint">结构：标签 + 图标 → 等宽大数值 → 趋势/辅助说明。右上角淡色圆形光晕仅作装饰，不承载信息。</p>
+      </div>
+
+      <!-- 11 表格 -->
+      <div class="comp-card">
+        <div class="comp-title"><span class="name">11 表格 Table</span><span class="num">Data Grid</span></div>
+        <div class="card" style="box-shadow:none">
+          <table class="tbl">
+            <thead><tr><th>时间</th><th>规则名</th><th>目标微信群</th><th>状态</th></tr></thead>
+            <tbody>
+              <tr><td class="t-time">09:42</td><td class="t-strong">数字质控全部消息</td><td class="t-muted">申通五星业务员培训群</td><td><span class="badge-s ok"><span class="d"></span>命中</span></td></tr>
+              <tr><td class="t-time">09:15</td><td class="t-strong">示例公司全部消息</td><td class="t-muted">大江东转运中心; 质控管理群</td><td><span class="badge-s ok"><span class="d"></span>命中</span></td></tr>
+              <tr><td class="t-time">08:41</td><td class="t-strong">—</td><td class="t-muted">—</td><td><span class="badge-s neutral"><span class="d"></span>未命中规则</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="field-hint">表头浅底、行悬停高亮、1px 内分隔；时间/计数等宽对齐。对应「消息记录 / 规则与会话 / 漏转对账」三处列表。</p>
+      </div>
+
+      <!-- 12 Toast -->
+      <div class="comp-card">
+        <div class="comp-title"><span class="name">12 Toast 提示</span><span class="num">4 型</span></div>
+        <div class="demo-col">
+          <div class="toast ok"><svg class="ic"><use href="#i-check-circle"/></svg><div><div class="tt">自检通过</div><div class="td">采集端与投递端均正常，可以开始运行。</div></div><svg class="ic ic-14 tx"><use href="#i-x"/></svg></div>
+          <div class="toast info"><svg class="ic"><use href="#i-info"/></svg><div><div class="tt">数据来源已切换</div><div class="td">手机钉钉 · 无障碍，重新「开始运行」后生效。</div></div><svg class="ic ic-14 tx"><use href="#i-x"/></svg></div>
+          <div class="toast warn"><svg class="ic"><use href="#i-alert"/></svg><div><div class="tt">投递失败，准备重试</div><div class="td">微信窗口未就绪，将在 3 秒后重试。</div></div><svg class="ic ic-14 tx"><use href="#i-x"/></svg></div>
+          <div class="toast err"><svg class="ic"><use href="#i-x-circle"/></svg><div><div class="tt">发送失败</div><div class="td">errcode=310000：机器人安全设置不匹配。</div></div><svg class="ic ic-14 tx"><use href="#i-x"/></svg></div>
+        </div>
+      </div>
+
+      <!-- 13 空状态 -->
+      <div class="comp-card" style="grid-column:1 / -1">
+        <div class="comp-title"><span class="name">13 空状态 Empty State</span><span class="num">No Data</span></div>
+        <div class="grid g2">
+          <div class="empty-demo">
+            <div class="ring"><svg class="ic ic-28"><use href="#i-inbox"/></svg></div>
+            <div class="t">还没有消息记录</div>
+            <div class="d">点「F5 启动」开始运行后，识别到的新消息会实时出现在这里。历史消息可从「消息记录」导出 CSV。</div>
+            <button class="btn btn-primary" style="margin-top:6px"><svg class="ic"><use href="#i-play"/></svg>F5 启动</button>
+          </div>
+          <div class="empty-demo">
+            <div class="ring" style="background:var(--c-success-50);color:var(--c-success-600)"><svg class="ic ic-28"><use href="#i-check-circle"/></svg></div>
+            <div class="t">漏转对账：暂无异常</div>
+            <div class="d">已用钉钉电脑端本地库核对近 12 小时的卡片，桥已全部入库，没有发现漏转。每 10 分钟自动核对一次。</div>
+            <button class="btn btn-secondary" style="margin-top:6px"><svg class="ic"><use href="#i-refresh"/></svg>立即核对</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================== 05 交互状态 ======================== -->
+  <section class="section" id="s5">
+    <div class="sec-head"><span class="sec-no">05</span><h2>交互状态矩阵</h2>
+      <span class="en">Interaction States</span></div>
+    <p class="sec-desc">hover / active / focus / disabled / loading / error 在按钮与输入框上均可见。默认态组件支持真实 <span class="mono">:hover :focus :active</span>；其余态用修饰类静态锁定以便对照（Rust 实现时按状态枚举切换样式）。</p>
+
+    <div class="card card-pad">
+      <div class="matrix-scroll">
+      <div class="state-matrix">
+        <div class="sm-cell head">控件 / 状态</div>
+        <div class="sm-cell head">默认 Default</div>
+        <div class="sm-cell head">悬停 Hover</div>
+        <div class="sm-cell head">聚焦 Focus</div>
+        <div class="sm-cell head">按下 Active</div>
+        <div class="sm-cell head">禁用/加载/错误</div>
+
+        <div class="sm-cell rowhead">主按钮</div>
+        <div class="sm-cell"><button class="btn btn-primary"><svg class="ic"><use href="#i-play"/></svg>F5 启动</button></div>
+        <div class="sm-cell"><button class="btn btn-primary" style="background:var(--c-primary-hover)"><svg class="ic"><use href="#i-play"/></svg>F5 启动</button><span class="cap">#2456C8</span></div>
+        <div class="sm-cell"><button class="btn btn-primary is-focus"><svg class="ic"><use href="#i-play"/></svg>F5 启动</button><span class="cap">focus ring</span></div>
+        <div class="sm-cell"><button class="btn btn-primary is-active"><svg class="ic"><use href="#i-play"/></svg>F5 启动</button><span class="cap">translateY(1px)</span></div>
+        <div class="sm-cell"><button class="btn btn-primary" disabled><span class="spinner"></span>启动中…</button><span class="cap">loading + disabled</span></div>
+
+        <div class="sm-cell rowhead">次要按钮</div>
+        <div class="sm-cell"><button class="btn btn-secondary"><svg class="ic"><use href="#i-refresh"/></svg>自检</button></div>
+        <div class="sm-cell"><button class="btn btn-secondary" style="background:var(--bg-hover);border-color:var(--c-primary-300);color:var(--c-primary-600)"><svg class="ic"><use href="#i-refresh"/></svg>自检</button></div>
+        <div class="sm-cell"><button class="btn btn-secondary is-focus"><svg class="ic"><use href="#i-refresh"/></svg>自检</button></div>
+        <div class="sm-cell"><button class="btn btn-secondary is-active"><svg class="ic"><use href="#i-refresh"/></svg>自检</button></div>
+        <div class="sm-cell"><button class="btn btn-disabled" disabled>切到钉钉群</button><span class="cap">disabled</span></div>
+
+        <div class="sm-cell rowhead">输入框</div>
+        <div class="sm-cell"><input class="input" style="width:150px" value="8765"></div>
+        <div class="sm-cell"><input class="input" style="width:150px;border-color:var(--c-primary-300)" value="8765"></div>
+        <div class="sm-cell"><input class="input is-focus" style="width:150px" value="8765"><span class="cap">蓝色描边 + ring</span></div>
+        <div class="sm-cell"><input class="input" style="width:150px" value="Ctrl+Alt+W" readonly></div>
+        <div class="sm-cell"><input class="input is-error" style="width:150px" value="Ctrl+Alt+"><span class="cap" style="color:var(--c-danger-600)">error + 提示文案</span></div>
+      </div>
+      </div>
+      <div class="callout" style="margin-top:16px">
+        <svg class="ic"><use href="#i-info"/></svg>
+        <p>可访问性：所有可聚焦控件保留 <strong>3px 聚焦环</strong>；禁用态 <code>pointer-events:none</code> 并给出 <code>title</code> 说明原因（如「运行中不可重复启动」）；加载态按钮禁止重复提交并显示 spinner。错误态必须同时给出文字说明，不能只靠红色描边。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================== 06 Rust 设计 Token ======================== -->
+  <section class="section" id="s6">
+    <div class="sec-head"><span class="sec-no">06</span><h2>给 Rust GUI 实现的设计 Token</h2>
+      <span class="en">Engineering Handoff</span></div>
+    <p class="sec-desc">下列 <span class="mono">:root</span> 即本文件真实生效的变量表，也是 Tauri / egui / slint 重写的唯一数据源。建议按语义名映射到 Rust 侧的主题结构体，而非在控件里写死色值。</p>
+
+    <div class="grid g2">
+      <div class="card card-pad">
+        <div class="scale-title">变量速查表（分类 / 变量 / 值）</div>
+        <table class="token-table">
+          <thead><tr><th>分类</th><th>变量</th><th>值</th></tr></thead>
+          <tbody>
+            <tr><td>主色</td><td class="k">--c-primary</td><td class="v">#2F6BED</td></tr>
+            <tr><td>主色悬停</td><td class="k">--c-primary-hover</td><td class="v">#2456C8</td></tr>
+            <tr><td>成功</td><td class="k">--c-success</td><td class="v">#0F9D58</td></tr>
+            <tr><td>警告</td><td class="k">--c-warning</td><td class="v">#D99000</td></tr>
+            <tr><td>危险</td><td class="k">--c-danger</td><td class="v">#E5484D</td></tr>
+            <tr><td>应用底</td><td class="k">--bg-app</td><td class="v">#EEF1F7</td></tr>
+            <tr><td>卡片面</td><td class="k">--bg-surface</td><td class="v">#FFFFFF</td></tr>
+            <tr><td>次级面</td><td class="k">--bg-surface-2</td><td class="v">#F8FAFD</td></tr>
+            <tr><td>标题/数值</td><td class="k">--text-strong</td><td class="v">#16203A</td></tr>
+            <tr><td>正文</td><td class="k">--text</td><td class="v">#1C2740</td></tr>
+            <tr><td>次要文字</td><td class="k">--text-muted</td><td class="v">#5C6884</td></tr>
+            <tr><td>边框</td><td class="k">--border</td><td class="v">#E2E7F0</td></tr>
+            <tr><td>强边框</td><td class="k">--border-strong</td><td class="v">#CBD5E6</td></tr>
+            <tr><td>正文字号</td><td class="k">--fs-14</td><td class="v">14px</td></tr>
+            <tr><td>大数值</td><td class="k">--fs-30</td><td class="v">30px</td></tr>
+            <tr><td>间距基准</td><td class="k">--sp-4</td><td class="v">16px</td></tr>
+            <tr><td>卡片圆角</td><td class="k">--r-md</td><td class="v">10px</td></tr>
+            <tr><td>控件圆角</td><td class="k">--r-sm</td><td class="v">6px</td></tr>
+            <tr><td>卡片阴影</td><td class="k">--shadow-sm</td><td class="v">0 2px 8px …</td></tr>
+            <tr><td>常规动效</td><td class="k">--dur-base</td><td class="v">180ms</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card card-pad">
+        <div class="scale-title">自定义绘制 vs 可用原生控件</div>
+        <p class="note" style="margin-bottom:12px"><strong>需要自定义绘制（custom draw）：</strong></p>
+        <ul class="note" style="margin-left:18px">
+          <li>自定义标题栏与窗口控制按钮（无边框窗口时必做，含拖拽区 / 双击最大化）。</li>
+          <li>连接状态灯（带 pulse 动画圆点）、状态徽标、KPI 卡光晕与趋势箭头。</li>
+          <li>「手机画面」投屏画布：位图缩放、点击/滑动映射、中央错误文字、notch 装饰。</li>
+          <li>等宽日志着色（按 INFO/SYS/TOOL/WARN/ERROR 分色）、表格斑马纹与悬停行。</li>
+          <li>开关 Switch、进度条纹动画、Spinner（旋转）、聚焦环。</li>
+          <li>Toast 浮层与空状态插画（内联 SVG 线性图标）。</li>
+        </ul>
+        <p class="note" style="margin:12px 0"><strong>可直接使用原生 / 近原生控件：</strong></p>
+        <ul class="note" style="margin-left:18px">
+          <li>单行输入框、数字微调 Spinbox → 原生 text input / spin button。</li>
+          <li>下拉框（数据来源 / 时间档位 / 巡检档位）→ 原生 combo box / select。</li>
+          <li>复选框、单选按钮 → 原生 checkbox / radio（仅需换主题色）。</li>
+          <li>标签页 Notebook → 原生 tab widget（套用激活条 + 浅底）。</li>
+          <li>按钮 → 原生 button + 状态枚举样式（primary/secondary/danger/ghost/disabled/loading）。</li>
+          <li>垂直/水平滚动区、分割线、菜单 → 框架原生能力。</li>
+        </ul>
+        <div class="callout" style="margin-top:14px">
+          <svg class="ic"><use href="#i-info"/></svg>
+          <p>建议：把所有 token 收进一个 <code>Theme</code> 结构（颜色 24 / 字号 9 / 间距 9 / 圆角 6 / 阴影 4 / 动效 3 组），控件只引用语义名。<strong>egui / slint</strong> 用 <code>Style</code> 覆盖；<strong>Tauri</strong> 前端可直接复用本文件 CSS 变量。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="scale-title" style="margin:22px 0 10px">完整 :root 变量表（可直接复制）</div>
+    <pre class="code"><span class="cm">/* 完整设计 Token —— 颜色 / 字号 / 间距 / 圆角 / 阴影 / 动效时长 */</span>
+<span class="sel">:root</span>{
+  <span class="cm">/* Primary */</span>
+  <span class="var">--c-primary-50</span>:<span class="val">#EEF3FE</span>; <span class="var">--c-primary-100</span>:<span class="val">#DCE8FD</span>; <span class="var">--c-primary-200</span>:<span class="val">#BBD2FB</span>;
+  <span class="var">--c-primary-300</span>:<span class="val">#8FB6F7</span>; <span class="var">--c-primary-400</span>:<span class="val">#5C93F0</span>; <span class="var">--c-primary-500</span>:<span class="val">#2F6BED</span>;
+  <span class="var">--c-primary-600</span>:<span class="val">#2456C8</span>; <span class="var">--c-primary-700</span>:<span class="val">#1B419B</span>;
+  <span class="var">--c-primary</span>:var(--c-primary-500); <span class="var">--c-on-primary</span>:<span class="val">#FFFFFF</span>;
+  <span class="cm">/* Success / Warning / Danger / Info */</span>
+  <span class="var">--c-success</span>:<span class="val">#0F9D58</span>; <span class="var">--c-success-50</span>:<span class="val">#E9F7EF</span>; <span class="var">--c-success-600</span>:<span class="val">#0B7E46</span>;
+  <span class="var">--c-warning</span>:<span class="val">#D99000</span>; <span class="var">--c-warning-50</span>:<span class="val">#FFF5DA</span>; <span class="var">--c-warning-fg</span>:<span class="val">#8A6100</span>;
+  <span class="var">--c-danger</span>:<span class="val">#E5484D</span>;  <span class="var">--c-danger-50</span>:<span class="val">#FDECEC</span>;  <span class="var">--c-danger-600</span>:<span class="val">#C7363B</span>;
+  <span class="cm">/* Neutral 10 阶 */</span>
+  <span class="var">--c-n0</span>:<span class="val">#FFFFFF</span>; <span class="var">--c-n100</span>:<span class="val">#F7F9FC</span>; <span class="var">--c-n150</span>:<span class="val">#F1F4F9</span>;
+  <span class="var">--c-n200</span>:<span class="val">#EEF1F7</span>; <span class="var">--c-n300</span>:<span class="val">#E2E7F0</span>; <span class="var">--c-n400</span>:<span class="val">#CBD5E6</span>;
+  <span class="var">--c-n500</span>:<span class="val">#A7B2C6</span>; <span class="var">--c-n600</span>:<span class="val">#7A869E</span>; <span class="var">--c-n700</span>:<span class="val">#5C6884</span>;
+  <span class="var">--c-n800</span>:<span class="val">#39445E</span>; <span class="var">--c-n900</span>:<span class="val">#1C2740</span>; <span class="var">--c-n950</span>:<span class="val">#16203A</span>;
+  <span class="cm">/* 语义背景 / 文字 / 边框 */</span>
+  <span class="var">--bg-app</span>:<span class="val">#EEF1F7</span>; <span class="var">--bg-surface</span>:<span class="val">#FFFFFF</span>; <span class="var">--bg-surface-2</span>:<span class="val">#F8FAFD</span>;
+  <span class="var">--bg-subtle</span>:<span class="val">#F1F4F9</span>; <span class="var">--bg-hover</span>:<span class="val">#F1F5FC</span>; <span class="var">--bg-sidebar</span>:<span class="val">#F7F9FC</span>;
+  <span class="var">--text-strong</span>:<span class="val">#16203A</span>; <span class="var">--text</span>:<span class="val">#1C2740</span>;
+  <span class="var">--text-muted</span>:<span class="val">#5C6884</span>; <span class="var">--text-faint</span>:<span class="val">#8A96AE</span>;
+  <span class="var">--border</span>:<span class="val">#E2E7F0</span>; <span class="var">--border-strong</span>:<span class="val">#CBD5E6</span>; <span class="var">--focus-ring</span>:rgba(47,107,237,.22);
+  <span class="cm">/* 字体 */</span>
+  <span class="var">--font-sans</span>:<span class="val">"Microsoft YaHei UI","Microsoft YaHei","Source Han Sans SC",sans-serif</span>;
+  <span class="var">--font-mono</span>:<span class="val">"Cascadia Mono","Consolas","Sarasa Mono SC",monospace</span>;
+  <span class="cm">/* 字号 */</span>
+  <span class="var">--fs-11</span>:<span class="val">11px</span>; <span class="var">--fs-12</span>:<span class="val">12px</span>; <span class="var">--fs-13</span>:<span class="val">13px</span>; <span class="var">--fs-14</span>:<span class="val">14px</span>;
+  <span class="var">--fs-16</span>:<span class="val">16px</span>; <span class="var">--fs-18</span>:<span class="val">18px</span>; <span class="var">--fs-20</span>:<span class="val">20px</span>;
+  <span class="var">--fs-24</span>:<span class="val">24px</span>; <span class="var">--fs-30</span>:<span class="val">30px</span>; <span class="var">--fs-38</span>:<span class="val">38px</span>;
+  <span class="cm">/* 间距梯度 */</span>
+  <span class="var">--sp-1</span>:<span class="val">4px</span>; <span class="var">--sp-2</span>:<span class="val">8px</span>; <span class="var">--sp-3</span>:<span class="val">12px</span>; <span class="var">--sp-4</span>:<span class="val">16px</span>;
+  <span class="var">--sp-5</span>:<span class="val">20px</span>; <span class="var">--sp-6</span>:<span class="val">24px</span>; <span class="var">--sp-8</span>:<span class="val">32px</span>; <span class="var">--sp-10</span>:<span class="val">40px</span>; <span class="var">--sp-12</span>:<span class="val">48px</span>;
+  <span class="cm">/* 圆角 */</span>
+  <span class="var">--r-xs</span>:<span class="val">4px</span>; <span class="var">--r-sm</span>:<span class="val">6px</span>; <span class="var">--r-md</span>:<span class="val">10px</span>;
+  <span class="var">--r-lg</span>:<span class="val">14px</span>; <span class="var">--r-xl</span>:<span class="val">20px</span>; <span class="var">--r-full</span>:<span class="val">999px</span>;
+  <span class="cm">/* 阴影 */</span>
+  <span class="var">--shadow-xs</span>:<span class="val">0 1px 2px rgba(28,39,64,.05)</span>;
+  <span class="var">--shadow-sm</span>:<span class="val">0 2px 8px rgba(28,39,64,.06)</span>;
+  <span class="var">--shadow-md</span>:<span class="val">0 8px 24px rgba(28,39,64,.09)</span>;
+  <span class="var">--shadow-lg</span>:<span class="val">0 20px 56px rgba(28,39,64,.14)</span>;
+  <span class="var">--shadow-focus</span>:<span class="val">0 0 0 3px var(--focus-ring)</span>;
+  <span class="cm">/* 动效 */</span>
+  <span class="var">--dur-fast</span>:<span class="val">120ms</span>; <span class="var">--dur-base</span>:<span class="val">180ms</span>; <span class="var">--dur-slow</span>:<span class="val">260ms</span>;
+  <span class="var">--ease</span>:<span class="val">cubic-bezier(.2,.7,.3,1)</span>;
+  <span class="cm">/* 尺寸栅格 */</span>
+  <span class="var">--h-titlebar</span>:<span class="val">46px</span>; <span class="var">--h-topbar</span>:<span class="val">68px</span>; <span class="var">--h-bottombar</span>:<span class="val">58px</span>;
+  <span class="var">--w-sidebar</span>:<span class="val">216px</span>; <span class="var">--w-phone</span>:<span class="val">308px</span>; <span class="var">--h-control</span>:<span class="val">34px</span>;
+}</pre>
+  </section>
+
+  <!-- ======================== 07 中文设计规范说明 ======================== -->
+  <section class="section" id="s7">
+    <div class="sec-head"><span class="sec-no">07</span><h2>中文设计规范说明</h2>
+      <span class="en">Guidelines</span></div>
+    <div class="prose">
+      <h3><span class="n">01</span>布局栅格 Layout Grid</h3>
+      <p>主窗口以 <strong>1440×900</strong> 为设计基准，采用 <strong>4px 基准栅格</strong>，所有间距、控件高度、圆角均为 4 的倍数（<code>--sp-*</code> / <code>--h-control 34</code> / <code>--r-*</code>）。三列结构固定：左侧导航 <strong>216px</strong>、右侧手机画面 <strong>308px</strong>、中间主区自适应；标题栏 46、状态条 68、试运行条 34、底栏 58 均为固定高，剩余高度全给主区。中间主区再用 4 列 KPI + 主区「消息流水 1.35 : 实时日志 1」双栏栅格。窗口缩放时只允许中间主区伸缩，左右两列与所有栏高固定，避免手机画面被挤出屏幕（沿用现有 <code>pack</code> 顺序踩坑经验）。</p>
+
+      <h3><span class="n">02</span>层级 Hierarchy</h3>
+      <p>建立清晰的<strong>四层高度</strong>：① 桌面底 <code>--bg-app</code> → ② 导航 / 顶栏 <code>--bg-surface-2</code> → ③ 卡片 / 面板 <code>--bg-surface</code> → ④ 浮层 Toast <code>--bg-surface + shadow-md</code>。层级靠「背景明度 + 1px 边框 + 柔和阴影」区分，<strong>不靠浓重投影</strong>。信息层级：标题 24/700 → 数值 30/700 等宽 → 正文 14/400 → 说明 12/400 次要色。强调色在任意一屏内<strong>只出现一个实心块</strong>（当前可点的主按钮），其余用描边/幽灵按钮，延续 <code>gui.py</code>「实心 vs 空心」判定可用态的原则。</p>
+
+      <h3><span class="n">03</span>可读性 Readability</h3>
+      <p>浅底深字，正文 <code>#1C2740</code> 对白底对比度约 <strong>13:1</strong>，次要文字 <code>#5C6884</code> 约 <strong>5.4:1</strong>，均达 WCAG AA。中文优先微软雅黑 / 思源黑体，行高 1.55–1.75；<strong>日志、时间戳、计数、Token、热键一律等宽</strong>，保证列对齐与数字辨识。长群名用单行省略号 + <code>title</code> 完整提示；表格行 hover 高亮、日志按级别着色（INFO 蓝 / SYS 灰 / TOOL 紫 / WARN 琥珀 / ERROR 红），但颜色从不作为唯一信息载体，始终配文字或图标。状态灯用圆点 + 文案双编码，照顾色觉障碍用户。</p>
+
+      <h3><span class="n">04</span>深浅色适配建议 Dark Mode</h3>
+      <p>本稿为浅色主题（与当前 IDE 一致），但所有颜色均通过<strong>语义变量</strong>引用，深色适配只需替换一组 token，不改任何控件代码：</p>
+      <ul>
+        <li>背景反转：<code>--bg-app</code> → <code>#0F1626</code>、<code>--bg-surface</code> → <code>#1A2436</code>、<code>--bg-surface-2</code> → <code>#212D42</code>；文字相应反转为浅色（<code>#E8EDF6</code> / <code>#AEB9CE</code>）。</li>
+        <li>主色降饱和提亮：<code>--c-primary</code> → <code>#6E9BFF</code>，保证在深底上仍有 4.5:1；状态色同样改用浅色阶（如成功 <code>#4CC38A</code>）。</li>
+        <li>深色下<strong>阴影几乎失效</strong>，层级改用 <code>--border</code> 提亮（<code>rgba(255,255,255,.08)</code>）的 1px 描边表达；聚焦环改半透明主色。</li>
+        <li>浅底语义色（成功/警告/危险 <code>*-50</code>）在深色下改为「深色透明叠加」，文字用对应亮色，避免大面积高亮块刺眼。</li>
+        <li>「手机画面」画布、KPI 光晕、日志代码底色单独给变量，深色时单独校准，不与通用 surface 共用。</li>
+      </ul>
+
+      <h3><span class="n">05</span>工程落地约束</h3>
+      <p>图标全部为内联 SVG 线性图标（<code>24 网格 / 1.7px / currentColor</code>），Rust 侧可直接导出为路径数据或字体图标；<strong>禁止 emoji</strong>，状态点用纯几何绘制。所有交互态以「状态枚举」驱动样式（default / hover / active / focus / disabled / loading / error），与后端 worker 通过管道回传的运行状态（idle / running / checking / stopping）一一对应。文案保持真实功能口径，不使用占位文本；涉及「试运行 / 漏转 / 对账 / USB 未授权」等提示，颜色语义与 <code>phone_panel.py</code> 的错误分级保持一致。</p>
+
+      <div class="callout">
+        <svg class="ic"><use href="#i-check-circle"/></svg>
+        <p>交付边界：本文件为纯静态自包含 HTML（内联 CSS、零外链、无 JS 框架），仅新建 <code>design/ui-mockup.html</code>，未修改项目任何现有代码。双击即可在浏览器预览全部设计系统、主窗口、三态手机面板、组件规范与 Token 表。</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="footer">
+    <b>喵喵钉钉-微信消息转发桥</b> · 界面重设计视觉稿 v1.0 · 浅色主题 · 主色 #2F6BED<br>
+    文案取自 app/gui.py · app/settings_ui.py · app/phone_panel.py · README.md　|　设计总监交付 · 面向 Rust GUI 重写
+  </div>
+
+</div>
+</body>
+</html>

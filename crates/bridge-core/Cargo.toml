@@ -1,0 +1,9 @@
+[package]
+name = "bridge-core"
+version.workspace = true
+edition.workspace = true
+description = "钉钉到微信转发桥的纯逻辑核心，与 Python bridge/ 逐步做 golden 对拍"
+
+[dependencies]
+md-5 = { workspace = true }
+rusqlite = { workspace = true }
